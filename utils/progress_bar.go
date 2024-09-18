@@ -3,12 +3,14 @@ package utils
 import (
 	"context"
 	"fmt"
-	"github.com/cheggaaa/pb/v3"
+	"github.com/gosuri/uiprogress"
 	"github.com/samber/lo"
 )
 
 type ProgressBar struct {
-	*pb.ProgressBar
+	bar          *uiprogress.Bar
+	progress     *uiprogress.Progress
+	title        string
 	showProgress bool
 }
 
@@ -36,30 +38,37 @@ func NewProgressBar(ctx context.Context, titlePrefix string, titleSuffix string,
 		title += "." + titleSuffix
 	}
 
-	var bar *pb.ProgressBar
 	if showProgress {
-		tmpl := `{{ red "%s:" }} {{ bar . "<" "-" (cycle . "↖" "↗" "↘" "↙" ) "." ">"}} {{speed . | rndcolor }} {{percent .}} {{string . "my_green_string" | green}} {{string . "my_blue_string" | blue}}\n`
-
-		bar = pb.ProgressBarTemplate(fmt.Sprintf(tmpl, title)).Start(total)
-		bar = bar.Set("my_green_string", "green").Set("my_blue_string", "blue")
+		uip := uiprogress.New()
+		uip.Start()
+		bar := uip.AddBar(total).AppendCompleted().PrependElapsed()
+		return &ProgressBar{bar: bar, progress: uip, title: title, showProgress: showProgress}
 	}
 
-	return &ProgressBar{bar, showProgress}
+	return &ProgressBar{showProgress: showProgress, title: title}
 }
 
-func (bar *ProgressBar) Increment() *ProgressBar {
+func (bar *ProgressBar) Step(stepTitle string) {
 	if !bar.showProgress {
-		return bar
+		return
 	}
-	bar.ProgressBar = bar.Add(1)
-	return bar
+	bar.bar.PrependFunc(func(b *uiprogress.Bar) string {
+		return fmt.Sprintf("%s: %d / %d [%s]", bar.title, bar.bar.Current(), bar.bar.Total, stepTitle)
+	})
 }
 
-func (bar *ProgressBar) Finish() *ProgressBar {
+func (bar *ProgressBar) Increment() {
 	if !bar.showProgress {
-		return bar
+		return
+	}
+	bar.bar.Incr()
+}
+
+func (bar *ProgressBar) Finish() {
+	if !bar.showProgress {
+		return
 	}
 
-	bar.ProgressBar = bar.ProgressBar.Finish()
-	return bar
+	bar.Step("done")
+	bar.progress.Stop()
 }

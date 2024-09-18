@@ -1,0 +1,60 @@
+level: info
+show_progress: false
+elastics:
+  es5:
+    addresses:
+      - "http://127.0.0.1:15200"
+    user: ""
+    password: ""
+
+  es6:
+    addresses:
+      - "http://127.0.0.1:16200"
+    user: ""
+    password: ""
+
+  es7:
+    addresses:
+      - "http://127.0.0.1:17200"
+    user: ""
+    password: ""
+
+  es8:
+    addresses:
+      - "http://127.0.0.1:18200"
+    user: ""
+    password: ""
+
+tasks:
+  - name: task1
+    source_es: es5
+    target_es: es8
+    #    index_pairs:
+    #      -
+    #        source_index: "sample_hello"
+    #        target_index: "sample_hello"
+    index_pattern: "sample_world"
+    action: sync
+    force: true
+#  - name: task2
+#    source_es: es5
+#    target_es: es8
+#    #    index_pairs:
+#    #      -
+#    #        source_index: "sample_hello"
+#    #        target_index: "sample_hello"
+#    index_pattern: "sample*"
+#    action: compare
+#  - name: task3
+#    source_es: es5
+#    target_es: es8
+#    buffer_count: 1000
+#    slice_size: 5
+#
+#    #    index_pairs:
+#    #      -
+#    #        source_index: "sample_hello"
+#    #        target_index: "sample_hello"
+#    index_pattern: "sample*"
+#    action: sync_diff
+#    action: sync_diff

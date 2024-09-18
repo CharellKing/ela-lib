@@ -49,15 +49,16 @@ func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
 
 func (t *TaskMgr) Run(ctx context.Context) error {
 	ctx = utils.SetCtxKeyShowProgress(ctx, t.showProgress)
-	bar := utils.NewProgressBar(ctx, "All Task", "", len(t.taskCfgs))
+	bar := utils.NewProgressBar(ctx, "All tasks", "", len(t.taskCfgs))
 
 	for _, taskCfg := range t.taskCfgs {
 		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES])
+		bar.Step(fmt.Sprintf("process task %s", taskCfg.Name))
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
 		}
 
-		bar = bar.Increment()
+		bar.Increment()
 		utils.GetLogger(task.GetCtx()).Debug("task done")
 	}
 

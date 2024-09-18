@@ -39,7 +39,7 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 	}
 }
 
-func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config, showProgress bool) (*Task, error) {
+func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config, allTaskProgress *utils.ProgressBar) (*Task, error) {
 	if cfg == nil {
 		return nil, nil
 
