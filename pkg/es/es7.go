@@ -431,7 +431,7 @@ func (es *V7) GetIndexes() ([]string, error) {
 	scanner := bufio.NewScanner(res.Body)
 	for scanner.Scan() {
 		value := scanner.Text()
-		segments := strings.Split(value, " ")
+		segments := strings.Fields(value)
 		indices = append(indices, segments[2])
 	}
 

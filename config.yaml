@@ -33,8 +33,8 @@ tasks:
     #      -
     #        source_index: "sample_hello"
     #        target_index: "sample_hello"
-    index_pattern: "sample_world"
-    action: sync
+    index_pattern: ".*"
+    action: compare
     force: true
 #  - name: task2
 #    source_es: es5
