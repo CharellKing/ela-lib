@@ -38,7 +38,7 @@ func NewProgressBar(ctx context.Context, titlePrefix string, titleSuffix string,
 
 	var bar *pb.ProgressBar
 	if showProgress {
-		tmpl := `{{ red "%s:" }} {{ bar . "<" "-" (cycle . "↖" "↗" "↘" "↙" ) "." ">"}} {{speed . | rndcolor }} {{percent .}} {{string . "my_green_string" | green}} {{string . "my_blue_string" | blue}}`
+		tmpl := `{{ red "%s:" }} {{ bar . "<" "-" (cycle . "↖" "↗" "↘" "↙" ) "." ">"}} {{speed . | rndcolor }} {{percent .}} {{string . "my_green_string" | green}} {{string . "my_blue_string" | blue}}\n`
 
 		bar = pb.ProgressBarTemplate(fmt.Sprintf(tmpl, title)).Start(total)
 		bar = bar.Set("my_green_string", "green").Set("my_blue_string", "blue")
