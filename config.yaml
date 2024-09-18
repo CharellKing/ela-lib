@@ -1,5 +1,5 @@
 level: info
-show_progress: false
+show_progress: true
 elastics:
   es5:
     addresses:

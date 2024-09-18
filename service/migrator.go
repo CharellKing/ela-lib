@@ -101,7 +101,7 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 	}
 
 	ctx := utils.SetCtxKeySourceIndex(m.ctx, indexPair.SourceIndex)
-	ctx = utils.SetCtxKeyTargetIndex(m.ctx, indexPair.TargetIndex)
+	ctx = utils.SetCtxKeyTargetIndex(ctx, indexPair.TargetIndex)
 
 	var err error
 	sourceSetting, err := m.SourceES.GetIndexMappingAndSetting(indexPair.SourceIndex)
