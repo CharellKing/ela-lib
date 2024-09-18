@@ -38,8 +38,9 @@ type ESConfig struct {
 }
 
 type Config struct {
-	ESConfigs    map[string]*ESConfig `mapstructure:"elastics"`
-	Tasks        []*TaskCfg           `mapstructure:"tasks"`
-	Level        string               `mapstructure:"level"`
-	ShowProgress bool                 `mapstructure:"show_progress"`
+	ESConfigs         map[string]*ESConfig `mapstructure:"elastics"`
+	Tasks             []*TaskCfg           `mapstructure:"tasks"`
+	Level             string               `mapstructure:"level"`
+	ShowProgress      bool                 `mapstructure:"show_progress"`
+	IgnoreSystemIndex bool                 `mapstructure:"ignore_system_index"`
 }

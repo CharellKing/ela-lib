@@ -1,5 +1,6 @@
 level: info
 show_progress: true
+ignore_system_index: true
 elastics:
   es5:
     addresses:

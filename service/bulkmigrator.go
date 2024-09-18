@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cast"
 	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -251,6 +252,8 @@ func (m *BulkMigrator) WithWriteSize(writeSize uint) *BulkMigrator {
 }
 
 func (m *BulkMigrator) filterIndexes(pattern string) ([]string, error) {
+	ignoreSystemIndex := utils.GetCtxKeyIgnoreSystemIndex(m.ctx)
+
 	indexes, err := m.SourceES.GetIndexes()
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -258,6 +261,10 @@ func (m *BulkMigrator) filterIndexes(pattern string) ([]string, error) {
 
 	var filteredIndexes []string
 	for _, index := range indexes {
+		if ignoreSystemIndex && strings.HasPrefix(index, ".") {
+			continue
+		}
+
 		ok, err := regexp.Match(pattern, []byte(index))
 		if err != nil {
 			return nil, errors.WithStack(err)

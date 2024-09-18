@@ -10,9 +10,10 @@ import (
 )
 
 type TaskMgr struct {
-	usedESMap    map[string]es.ES
-	taskCfgs     []*config.TaskCfg
-	showProgress bool
+	usedESMap         map[string]es.ES
+	taskCfgs          []*config.TaskCfg
+	showProgress      bool
+	ignoreSystemIndex bool
 }
 
 func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
@@ -41,14 +42,17 @@ func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
 	}
 
 	return &TaskMgr{
-		usedESMap:    usedESMap,
-		taskCfgs:     cfg.Tasks,
-		showProgress: cfg.ShowProgress,
+		usedESMap:         usedESMap,
+		taskCfgs:          cfg.Tasks,
+		showProgress:      cfg.ShowProgress,
+		ignoreSystemIndex: cfg.IgnoreSystemIndex,
 	}, nil
 }
 
 func (t *TaskMgr) Run(ctx context.Context) error {
 	ctx = utils.SetCtxKeyShowProgress(ctx, t.showProgress)
+	ctx = utils.SetCtxKeyIgnoreSystemIndex(ctx, t.ignoreSystemIndex)
+
 	bar := utils.NewProgressBar(ctx, "All tasks", "", len(t.taskCfgs))
 
 	for _, taskCfg := range t.taskCfgs {
