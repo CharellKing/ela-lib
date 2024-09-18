@@ -20,6 +20,10 @@
 # Go workspace file
 go.work
 go.work.sum
+.idea
+.vscode
+config.yml
+bin
+go.sum
+mod
 
-# env file
-.env
