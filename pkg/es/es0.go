@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"github.com/CharellKing/ela/config"
+	"github.com/CharellKing/ela-lib/config"
 	"io"
 	"net/http"
 	"strings"

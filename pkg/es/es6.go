@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/CharellKing/ela/config"
+	"github.com/CharellKing/ela-lib/config"
 	elasticsearch6 "github.com/elastic/go-elasticsearch/v6"
 	"github.com/elastic/go-elasticsearch/v6/esapi"
 	"github.com/mitchellh/mapstructure"

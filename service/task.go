@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/CharellKing/ela/config"
-	"github.com/CharellKing/ela/pkg/es"
-	"github.com/CharellKing/ela/utils"
+	"github.com/CharellKing/ela-lib/config"
+	"github.com/CharellKing/ela-lib/pkg/es"
+	"github.com/CharellKing/ela-lib/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"strings"

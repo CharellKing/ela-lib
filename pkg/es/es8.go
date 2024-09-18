@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/CharellKing/ela/config"
+	"github.com/CharellKing/ela-lib/config"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cast"
 	"io"

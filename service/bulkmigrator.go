@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/CharellKing/ela/config"
-	es2 "github.com/CharellKing/ela/pkg/es"
-	"github.com/CharellKing/ela/utils"
+	"github.com/CharellKing/ela-lib/config"
+	es2 "github.com/CharellKing/ela-lib/pkg/es"
+	"github.com/CharellKing/ela-lib/utils"
 	"github.com/alitto/pond"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"

@@ -1,7 +1,7 @@
 package es
 
 import (
-	"github.com/CharellKing/ela/config"
+	"github.com/CharellKing/ela-lib/config"
 	"testing"
 )
 

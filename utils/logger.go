@@ -2,7 +2,7 @@ package utils
 
 import (
 	"context"
-	"github.com/CharellKing/ela/config"
+	"github.com/CharellKing/ela-lib/config"
 	"github.com/samber/lo"
 	log "github.com/sirupsen/logrus"
 	"os"
