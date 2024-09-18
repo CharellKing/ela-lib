@@ -604,6 +604,9 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, totalWg *sync.WaitGroup
 		}()
 
 		for {
+			if scrollResult == nil {
+				break
+			}
 			if needHash {
 				lop.Map(scrollResult.Docs, func(doc *es2.Doc, _ int) *es2.Doc {
 					doc.Hash = m.getDocHash(doc)
@@ -714,7 +717,7 @@ func (m *Migrator) getOperationTitle(operation es2.Operation) string {
 func (m *Migrator) bulkWorker(doc <-chan *es2.Doc, total uint64, operation es2.Operation, errCh chan error) {
 	var wg sync.WaitGroup
 	var count atomic.Uint64
-	bar := utils.NewProgressBar(m.ctx, "All Task", fmt.Sprintf("bulk.%s", m.getOperationTitle(operation)),
+	bar := utils.NewProgressBar(m.ctx, "All Tasks", fmt.Sprintf("bulk.%s", m.getOperationTitle(operation)),
 		cast.ToInt(total))
 	defer bar.Finish()
 
