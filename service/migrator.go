@@ -418,9 +418,6 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 
 	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
 
-	bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
-	defer bar.Finish()
-
 	var (
 		sourceOk bool
 		targetOk bool
@@ -434,6 +431,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 	compareDocCh := make(chan *es2.Doc, m.BufferCount)
 
 	utils.GoRecovery(m.GetCtx(), func() {
+		bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
+		defer bar.Finish()
+
 		for {
 			var (
 				sourceResult *es2.Doc
