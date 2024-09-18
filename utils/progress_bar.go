@@ -24,12 +24,12 @@ func NewProgressBar(ctx context.Context, titlePrefix string, titleSuffix string,
 		title += "." + taskName
 	}
 
-	if !lo.IsEmpty(sourceIndex) && !lo.IsEmpty(targetIndex) {
-		title += "." + sourceIndex + "->" + targetIndex
-	}
-
 	if !lo.IsEmpty(action) {
 		title += "." + action
+	}
+
+	if !lo.IsEmpty(sourceIndex) && !lo.IsEmpty(targetIndex) {
+		title += "." + sourceIndex + "->" + targetIndex
 	}
 
 	if !lo.IsEmpty(titleSuffix) {
