@@ -42,6 +42,9 @@ func NewProgressBar(ctx context.Context, titlePrefix string, titleSuffix string,
 		uip := uiprogress.New()
 		uip.Start()
 		bar := uip.AddBar(total).AppendCompleted().PrependElapsed()
+		bar.PrependFunc(func(b *uiprogress.Bar) string {
+			return fmt.Sprintf("%s (%d/%d)", title, b.Current(), b.Total)
+		})
 		return &ProgressBar{bar: bar, progress: uip, title: title, showProgress: showProgress}
 	}
 
