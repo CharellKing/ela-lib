@@ -23,6 +23,7 @@ type TaskCfg struct {
 	BufferCount      uint         `mapstructure:"buffer_count"`
 	WriteParallelism uint         `mapstructure:"write_parallelism"`
 	WriteSize        uint         `mapstructure:"write_size"`
+	Ids              []string     `mapstructure:"ids"`
 }
 
 type IndexPair struct {

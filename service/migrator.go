@@ -37,9 +37,11 @@ type Migrator struct {
 	WriteParallel uint
 
 	WriteSize uint
+
+	Ids []string
 }
 
-func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstConfig *config.ESConfig) (*Migrator, error) {
+func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstConfig *config.ESConfig, ids []string) (*Migrator, error) {
 	srcES, err := es2.NewESV0(srcConfig).GetES()
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -131,6 +133,7 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		Ids:           m.Ids,
 	}
 }
 
@@ -149,6 +152,7 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		Ids:           m.Ids,
 	}
 }
 
@@ -167,6 +171,7 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		Ids:           m.Ids,
 	}
 }
 
@@ -185,6 +190,7 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		BufferCount:   sliceSize,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		Ids:           m.Ids,
 	}
 }
 
@@ -203,6 +209,7 @@ func (m *Migrator) WithWriteParallel(writeParallel uint) *Migrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: writeParallel,
 		WriteSize:     m.WriteSize,
+		Ids:           m.Ids,
 	}
 }
 
@@ -221,6 +228,26 @@ func (m *Migrator) WithWriteSize(writeSize uint) *Migrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     writeSize,
+		Ids:           m.Ids,
+	}
+}
+
+func (m *Migrator) WithIds(ids []string) *Migrator {
+	if m.err != nil {
+		return m
+	}
+
+	return &Migrator{
+		ctx:           m.ctx,
+		SourceES:      m.SourceES,
+		TargetES:      m.TargetES,
+		IndexPair:     m.IndexPair,
+		ScrollTime:    m.ScrollTime,
+		SliceSize:     m.SliceSize,
+		BufferCount:   m.BufferCount,
+		WriteParallel: m.WriteParallel,
+		WriteSize:     m.WriteSize,
+		Ids:           ids,
 	}
 }
 
@@ -251,6 +278,9 @@ func (m *Migrator) CopyIndexSettings(force bool) error {
 }
 
 func getQueryMap(docIds []string) map[string]interface{} {
+	if len(docIds) <= 0 {
+		return nil
+	}
 	return map[string]interface{}{
 		"query": map[string]interface{}{
 			"terms": map[string]interface{}{
@@ -382,9 +412,11 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 		return nil, errsCh
 	}
 
-	sourceDocCh, sourceTotal := m.search(m.SourceES, m.IndexPair.SourceIndex, nil, keywordFields, errCh, true)
+	queryMap := getQueryMap(m.Ids)
 
-	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, nil, keywordFields, errCh, true)
+	sourceDocCh, sourceTotal := m.search(m.SourceES, m.IndexPair.SourceIndex, queryMap, keywordFields, errCh, true)
+
+	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
 
 	bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
 	defer bar.Finish()
@@ -556,7 +588,7 @@ func (m *Migrator) Sync(force bool) error {
 	if err := m.CopyIndexSettings(force); err != nil {
 		return errors.WithStack(err)
 	}
-	if err := m.syncUpsert(nil, es2.OperationCreate); err != nil {
+	if err := m.syncUpsert(getQueryMap(m.Ids), es2.OperationCreate); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil
