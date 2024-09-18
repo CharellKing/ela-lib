@@ -23,6 +23,8 @@ const (
 	CtxKeyTargetFieldMap CtxKey = "targetFieldMap"
 
 	CtxKeyDateTimeFormatFixFields CtxKey = "dateTimeFormatFixFields"
+
+	CtxKeyShowProgress CtxKey = "showProgress"
 )
 
 func GetCtxKeySourceESVersion(ctx context.Context) string {
@@ -119,4 +121,12 @@ func GetCtxKeyDateTimeFormatFixFields(ctx context.Context) map[string]string {
 
 func SetCtxKeyDateTimeFormatFixFields(ctx context.Context, fields map[string]string) context.Context {
 	return context.WithValue(ctx, CtxKeyDateTimeFormatFixFields, fields)
+}
+
+func GetCtxKeyShowProgress(ctx context.Context) bool {
+	return cast.ToBool(ctx.Value(CtxKeyShowProgress))
+}
+
+func SetCtxKeyShowProgress(ctx context.Context, showProgress bool) context.Context {
+	return context.WithValue(ctx, CtxKeyShowProgress, showProgress)
 }

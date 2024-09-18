@@ -10,8 +10,9 @@ import (
 )
 
 type TaskMgr struct {
-	usedESMap map[string]es.ES
-	taskCfgs  []*config.TaskCfg
+	usedESMap    map[string]es.ES
+	taskCfgs     []*config.TaskCfg
+	showProgress bool
 }
 
 func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
@@ -38,20 +39,28 @@ func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
 			return nil, errors.WithStack(err)
 		}
 	}
+
 	return &TaskMgr{
-		usedESMap: usedESMap,
-		taskCfgs:  cfg.Tasks,
+		usedESMap:    usedESMap,
+		taskCfgs:     cfg.Tasks,
+		showProgress: cfg.ShowProgress,
 	}, nil
 }
 
 func (t *TaskMgr) Run(ctx context.Context) error {
+	ctx = utils.SetCtxKeyShowProgress(ctx, t.showProgress)
+	bar := utils.NewProgressBar(ctx, "All Task", "", len(t.taskCfgs))
+
 	for _, taskCfg := range t.taskCfgs {
 		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES])
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
 		}
 
-		utils.GetLogger(task.GetCtx()).Info("task done")
+		bar = bar.Increment()
+		utils.GetLogger(task.GetCtx()).Debug("task done")
 	}
+
+	bar.Finish()
 	return nil
 }

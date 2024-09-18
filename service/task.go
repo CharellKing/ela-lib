@@ -14,6 +14,7 @@ import (
 type Task struct {
 	bulkMigrator *BulkMigrator
 	force        bool
+	showProgress bool
 }
 
 func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targetES es.ES) *Task {
@@ -36,10 +37,9 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		bulkMigrator: bulkMigrator,
 		force:        taskCfg.Force,
 	}
-
 }
 
-func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config) (*Task, error) {
+func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config, showProgress bool) (*Task, error) {
 	if cfg == nil {
 		return nil, nil
 

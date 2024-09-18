@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	es2 "github.com/CharellKing/ela-lib/pkg/es"
 	"github.com/CharellKing/ela-lib/utils"
@@ -385,6 +386,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 
 	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, nil, keywordFields, errCh, true)
 
+	bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
+	defer bar.Finish()
+
 	var (
 		sourceOk bool
 		targetOk bool
@@ -414,11 +418,13 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 			}
 
 			if sourceResult != nil {
+				bar.Increment()
 				sourceCount++
 				sourceDocHashMap[sourceResult.ID] = sourceResult.Hash
 			}
 
 			if targetResult != nil {
+				bar.Increment()
 				targetCount++
 				targetDocHashMap[targetResult.ID] = targetResult.Hash
 			}
@@ -647,15 +653,16 @@ func (m *Migrator) search(es es2.ES, index string, query map[string]interface{},
 	return docCh, total.Load()
 }
 
-func (m *Migrator) singleBulkWorker(doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
+func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
 	operation es2.Operation, errCh chan error) {
 	var buf bytes.Buffer
+
 	for {
 		v, ok := <-doc
 		if !ok {
 			break
 		}
-
+		bar.Increment()
 		count.Add(1)
 		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
@@ -692,18 +699,34 @@ func (m *Migrator) singleBulkWorker(doc <-chan *es2.Doc, total uint64, count *at
 	}
 }
 
+func (m *Migrator) getOperationTitle(operation es2.Operation) string {
+	switch operation {
+	case es2.OperationCreate:
+		return "create"
+	case es2.OperationUpdate:
+		return "update"
+	case es2.OperationDelete:
+		return "delete"
+	default:
+		return ""
+	}
+}
 func (m *Migrator) bulkWorker(doc <-chan *es2.Doc, total uint64, operation es2.Operation, errCh chan error) {
 	var wg sync.WaitGroup
 	var count atomic.Uint64
+	bar := utils.NewProgressBar(m.ctx, "All Task", fmt.Sprintf("bulk.%s", m.getOperationTitle(operation)),
+		cast.ToInt(total))
+	defer bar.Finish()
+
 	if m.WriteParallel <= 1 {
-		m.singleBulkWorker(doc, total, &count, operation, errCh)
+		m.singleBulkWorker(bar, doc, total, &count, operation, errCh)
 	}
 
 	wg.Add(cast.ToInt(m.WriteParallel))
 	for i := 0; i < cast.ToInt(m.WriteParallel); i++ {
 		utils.GoRecovery(m.ctx, func() {
 			defer wg.Done()
-			m.singleBulkWorker(doc, total, &count, operation, errCh)
+			m.singleBulkWorker(bar, doc, total, &count, operation, errCh)
 		})
 	}
 	wg.Wait()

@@ -42,6 +42,8 @@ type BulkMigrator struct {
 	WriteParallel uint
 
 	WriteSize uint
+
+	ShowProgress bool
 }
 
 func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES) *BulkMigrator {
@@ -102,6 +104,7 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		ShowProgress:  m.ShowProgress,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexPair)
@@ -138,6 +141,7 @@ func (m *BulkMigrator) WithScrollTime(scrollTime uint) *BulkMigrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		ShowProgress:  m.ShowProgress,
 	}
 }
 
@@ -161,6 +165,7 @@ func (m *BulkMigrator) WithSliceSize(sliceSize uint) *BulkMigrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		ShowProgress:  m.ShowProgress,
 	}
 }
 
@@ -184,6 +189,7 @@ func (m *BulkMigrator) WithBufferCount(bufferCount uint) *BulkMigrator {
 		BufferCount:   bufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     m.WriteSize,
+		ShowProgress:  m.ShowProgress,
 	}
 }
 
@@ -207,6 +213,7 @@ func (m *BulkMigrator) WithWriteParallel(writeParallel uint) *BulkMigrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: writeParallel,
 		WriteSize:     m.WriteSize,
+		ShowProgress:  m.ShowProgress,
 	}
 }
 
@@ -231,6 +238,7 @@ func (m *BulkMigrator) WithWriteSize(writeSize uint) *BulkMigrator {
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
 		WriteSize:     writeSize,
+		ShowProgress:  m.ShowProgress,
 	}
 }
 
@@ -270,6 +278,7 @@ func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
+		ShowProgress:  m.ShowProgress,
 	}
 
 	var filterIndexes []string
@@ -317,6 +326,7 @@ func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,
 		WriteParallel: m.WriteParallel,
+		ShowProgress:  m.ShowProgress,
 	}
 }
 
@@ -325,7 +335,11 @@ func (m *BulkMigrator) Sync(force bool) error {
 		return errors.WithStack(m.Error)
 	}
 
+	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
+	defer bar.Finish()
+
 	m.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
 		if err := migrator.Sync(force); err != nil {
 			utils.GetLogger(migrator.GetCtx()).WithError(err).Error("sync")
 		}
@@ -338,8 +352,12 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 		return nil, errors.WithStack(m.Error)
 	}
 
+	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
+	defer bar.Finish()
+
 	var diffMap sync.Map
 	m.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
 		diffResult, err := migrator.SyncDiff()
 		if err != nil {
 			utils.GetLogger(migrator.GetCtx()).WithError(err).Info("syncDiff")
@@ -369,7 +387,11 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 
 	var diffMap sync.Map
 
+	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
+	defer bar.Finish()
+
 	m.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
 		diffResult, err := migrator.Compare()
 		if err != nil {
 			utils.GetLogger(m.GetCtx()).WithError(err).Info("compare")
@@ -398,7 +420,11 @@ func (m *BulkMigrator) CopyIndexSettings(force bool) error {
 		return errors.WithStack(m.Error)
 	}
 
+	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
+	defer bar.Finish()
+
 	m.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
 		if err := migrator.CopyIndexSettings(force); err != nil {
 			utils.GetLogger(migrator.GetCtx()).WithError(err).Error("copyIndexSettings")
 		}
