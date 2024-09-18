@@ -71,7 +71,5 @@ func (bar *ProgressBar) Finish() {
 	if !bar.showProgress {
 		return
 	}
-
-	bar.Step("done")
 	bar.progress.Stop()
 }
