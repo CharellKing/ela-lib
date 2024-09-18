@@ -372,11 +372,9 @@ func (m *BulkMigrator) Sync(force bool) error {
 
 	m.parallelRun(func(migrator *Migrator) {
 		defer bar.Increment()
-		bar.Step(fmt.Sprintf("start to sync %s -> %s", migrator.IndexPair.SourceIndex, migrator.IndexPair.TargetIndex))
 		if err := migrator.Sync(force); err != nil {
 			utils.GetLogger(migrator.GetCtx()).WithError(err).Error("sync")
 		}
-		bar.Step(fmt.Sprintf("end to sync %s -> %s", migrator.IndexPair.SourceIndex, migrator.IndexPair.TargetIndex))
 	})
 	return nil
 }
@@ -392,7 +390,6 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 	var diffMap sync.Map
 	m.parallelRun(func(migrator *Migrator) {
 		defer bar.Increment()
-		bar.Step(fmt.Sprintf("start to sync diff %s -> %s", migrator.IndexPair.SourceIndex, migrator.IndexPair.TargetIndex))
 		diffResult, err := migrator.SyncDiff()
 		if err != nil {
 			utils.GetLogger(migrator.GetCtx()).WithError(err).Info("syncDiff")
@@ -403,8 +400,6 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 		} else {
 			utils.GetLogger(migrator.GetCtx()).Info("no difference")
 		}
-		bar.Step(fmt.Sprintf("end to sync diff %s -> %s", migrator.IndexPair.SourceIndex, migrator.IndexPair.TargetIndex))
-
 	})
 
 	result := make(map[string]*DiffResult)
@@ -429,7 +424,6 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 
 	m.parallelRun(func(migrator *Migrator) {
 		defer bar.Increment()
-		bar.Step(fmt.Sprintf("start to compare %s -> %s", migrator.IndexPair.SourceIndex, migrator.IndexPair.TargetIndex))
 		diffResult, err := migrator.Compare()
 		if err != nil {
 			utils.GetLogger(m.GetCtx()).WithError(err).Info("compare")
@@ -440,7 +434,6 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 		} else {
 			utils.GetLogger(migrator.GetCtx()).Info("no difference")
 		}
-		bar.Step(fmt.Sprintf("end to compare %s -> %s", migrator.IndexPair.SourceIndex, migrator.IndexPair.TargetIndex))
 	})
 
 	result := make(map[string]*DiffResult)

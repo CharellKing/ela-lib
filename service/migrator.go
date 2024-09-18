@@ -41,7 +41,7 @@ type Migrator struct {
 	Ids []string
 }
 
-func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstConfig *config.ESConfig, ids []string) (*Migrator, error) {
+func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstConfig *config.ESConfig) (*Migrator, error) {
 	srcES, err := es2.NewESV0(srcConfig).GetES()
 	if err != nil {
 		return nil, errors.WithStack(err)

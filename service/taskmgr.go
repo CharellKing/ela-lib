@@ -53,7 +53,6 @@ func (t *TaskMgr) Run(ctx context.Context) error {
 
 	for _, taskCfg := range t.taskCfgs {
 		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES])
-		bar.Step(fmt.Sprintf("process task %s", taskCfg.Name))
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
 		}
