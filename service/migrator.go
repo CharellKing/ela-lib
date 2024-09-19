@@ -28,6 +28,8 @@ type Migrator struct {
 
 	IndexPair config.IndexPair
 
+	ScrollSize uint
+
 	ScrollTime uint
 
 	SliceSize uint
@@ -64,6 +66,7 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
 		ctx:           ctx,
 		SourceES:      srcES,
 		TargetES:      dstES,
+		ScrollSize:    defaultScrollSize,
 		ScrollTime:    defaultScrollTime,
 		SliceSize:     defaultSliceSize,
 		BufferCount:   defaultBufferCount,
@@ -128,6 +131,27 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     indexPair,
+		ScrollSize:    m.ScrollSize,
+		ScrollTime:    m.ScrollTime,
+		SliceSize:     m.SliceSize,
+		BufferCount:   m.BufferCount,
+		WriteParallel: m.WriteParallel,
+		WriteSize:     m.WriteSize,
+		Ids:           m.Ids,
+	}
+}
+
+func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
+	if m.err != nil {
+		return m
+	}
+
+	return &Migrator{
+		ctx:           m.ctx,
+		SourceES:      m.SourceES,
+		TargetES:      m.TargetES,
+		IndexPair:     m.IndexPair,
+		ScrollSize:    scrollSize,
 		ScrollTime:    m.ScrollTime,
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,
@@ -147,6 +171,7 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     m.IndexPair,
+		ScrollSize:    m.ScrollSize,
 		ScrollTime:    scrollTime,
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,
@@ -166,6 +191,7 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     m.IndexPair,
+		ScrollSize:    m.ScrollSize,
 		ScrollTime:    m.ScrollTime,
 		SliceSize:     sliceSize,
 		BufferCount:   m.BufferCount,
@@ -185,6 +211,7 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     m.IndexPair,
+		ScrollSize:    m.ScrollSize,
 		ScrollTime:    m.ScrollTime,
 		SliceSize:     m.SliceSize,
 		BufferCount:   sliceSize,
@@ -204,6 +231,7 @@ func (m *Migrator) WithWriteParallel(writeParallel uint) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     m.IndexPair,
+		ScrollSize:    m.ScrollSize,
 		ScrollTime:    m.ScrollTime,
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,
@@ -223,6 +251,7 @@ func (m *Migrator) WithWriteSize(writeSize uint) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     m.IndexPair,
+		ScrollSize:    m.ScrollSize,
 		ScrollTime:    m.ScrollTime,
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,
@@ -242,6 +271,7 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 		SourceES:      m.SourceES,
 		TargetES:      m.TargetES,
 		IndexPair:     m.IndexPair,
+		ScrollSize:    m.ScrollSize,
 		ScrollTime:    m.ScrollTime,
 		SliceSize:     m.SliceSize,
 		BufferCount:   m.BufferCount,

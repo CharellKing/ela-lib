@@ -17,6 +17,7 @@ type TaskCfg struct {
 	IndexPairs       []*IndexPair `mapstructure:"index_pairs"`
 	TaskAction       TaskAction   `mapstructure:"action"`
 	Force            bool         `mapstructure:"force"`
+	ScrollSize       uint         `mapstructure:"scroll_size"`
 	ScrollTime       uint         `mapstructure:"scroll_time"`
 	Parallelism      uint         `mapstructure:"parallelism"`
 	SliceSize        uint         `mapstructure:"slice_size"`

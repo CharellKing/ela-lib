@@ -28,6 +28,7 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 	bulkMigrator := NewBulkMigratorWithES(ctx, sourceES, targetES)
 	bulkMigrator = bulkMigrator.WithIndexPairs(taskCfg.IndexPairs...).
 		WithParallelism(taskCfg.Parallelism).
+		WithScrollSize(taskCfg.ScrollSize).
 		WithScrollTime(taskCfg.ScrollTime).
 		WithSliceSize(taskCfg.SliceSize).
 		WithBufferCount(taskCfg.BufferCount).
