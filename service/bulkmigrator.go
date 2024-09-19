@@ -18,7 +18,7 @@ import (
 const defaultParallelism = 12
 const defaultScrollTime = 10
 const defaultSliceSize = 20
-const defaultBufferCount = 5000
+const defaultBufferCount = 10000
 const defaultWriteParallel = 10
 const defaultWriteSize = 5 // MB
 

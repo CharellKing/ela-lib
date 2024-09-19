@@ -2,14 +2,12 @@ package utils
 
 import (
 	"context"
-	"fmt"
-	"github.com/gosuri/uiprogress"
+	"github.com/cheggaaa/pb/v3"
 	"github.com/samber/lo"
 )
 
 type ProgressBar struct {
-	bar          *uiprogress.Bar
-	progress     *uiprogress.Progress
+	bar          *pb.ProgressBar
 	title        string
 	showProgress bool
 }
@@ -39,37 +37,24 @@ func NewProgressBar(ctx context.Context, titlePrefix string, titleSuffix string,
 	}
 
 	if showProgress {
-		uip := uiprogress.New()
-		uip.Start()
-		bar := uip.AddBar(total).AppendCompleted().PrependElapsed()
-		bar.PrependFunc(func(b *uiprogress.Bar) string {
-			return fmt.Sprintf("%s (%d/%d)", title, b.Current(), b.Total)
-		})
-		return &ProgressBar{bar: bar, progress: uip, title: title, showProgress: showProgress}
+		bar := pb.New(total).Set("prefix", title)
+		bar.Start()
+		return &ProgressBar{bar: bar, title: title, showProgress: showProgress}
 	}
 
 	return &ProgressBar{showProgress: showProgress, title: title}
-}
-
-func (bar *ProgressBar) Step(stepTitle string) {
-	if !bar.showProgress {
-		return
-	}
-	bar.bar.PrependFunc(func(b *uiprogress.Bar) string {
-		return fmt.Sprintf("%s: %d / %d [%s]", bar.title, bar.bar.Current(), bar.bar.Total, stepTitle)
-	})
 }
 
 func (bar *ProgressBar) Increment() {
 	if !bar.showProgress {
 		return
 	}
-	bar.bar.Incr()
+	bar.bar.Increment()
 }
 
 func (bar *ProgressBar) Finish() {
 	if !bar.showProgress {
 		return
 	}
-	bar.progress.Stop()
+	bar.bar.Finish()
 }
