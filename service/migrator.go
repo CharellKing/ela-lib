@@ -647,7 +647,7 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, totalWg *sync.WaitGroup
 			scrollResult, err = es.NewScroll(m.ctx, index, &es2.ScrollOption{
 				Query:      query,
 				SortFields: sortFields,
-				ScrollSize: m.BufferCount,
+				ScrollSize: m.ScrollSize,
 				ScrollTime: m.ScrollTime,
 				SliceId:    sliceId,
 				SliceSize:  sliceSize,
@@ -679,7 +679,7 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, totalWg *sync.WaitGroup
 				docCh <- doc
 			}
 
-			if len(scrollResult.Docs) < cast.ToInt(m.BufferCount) {
+			if len(scrollResult.Docs) < cast.ToInt(m.ScrollSize) {
 				break
 			}
 			if scrollResult, err = es.NextScroll(m.GetCtx(), scrollResult.ScrollId, m.ScrollTime); err != nil {
