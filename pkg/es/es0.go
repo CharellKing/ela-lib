@@ -60,6 +60,8 @@ type ES interface {
 
 	CreateIndex(esSetting IESSettings) error
 	DeleteIndex(index string) error
+
+	Count(ctx context.Context, index string) (uint64, error)
 }
 
 type V0 struct {

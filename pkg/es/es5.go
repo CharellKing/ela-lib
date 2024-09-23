@@ -414,6 +414,28 @@ func (es *V5) BulkBody(index string, buf *bytes.Buffer, doc *Doc) error {
 	return nil
 }
 
+func (es *V5) Count(ctx context.Context, index string) (uint64, error) {
+	res, err := es.Client.Count(es.Client.Count.WithIndex(index))
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.IsError() {
+		return 0, errors.New(res.String())
+	}
+
+	var countResult map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&countResult); err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	return cast.ToUint64(countResult["count"]), nil
+}
+
 func (es *V5) Bulk(buf *bytes.Buffer) error {
 	// Execute the bulk request
 	res, err := es.Client.Bulk(bytes.NewReader(buf.Bytes()))

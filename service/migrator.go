@@ -624,7 +624,7 @@ func (m *Migrator) Sync(force bool) error {
 	return nil
 }
 
-func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, totalWg *sync.WaitGroup, total *atomic.Uint64, es es2.ES,
+func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
 	index string, query map[string]interface{}, sortFields []string,
 	sliceId *uint, sliceSize *uint, docCh chan *es2.Doc, errCh chan error, needHash bool) {
 
@@ -643,7 +643,6 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, totalWg *sync.WaitGroup
 		}()
 
 		func() {
-			defer totalWg.Done()
 			scrollResult, err = es.NewScroll(m.ctx, index, &es2.ScrollOption{
 				Query:      query,
 				SortFields: sortFields,
@@ -662,7 +661,6 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, totalWg *sync.WaitGroup
 				return
 			}
 
-			total.Add(cast.ToUint64(scrollResult.Total))
 		}()
 
 		for {
@@ -694,19 +692,23 @@ func (m *Migrator) search(es es2.ES, index string, query map[string]interface{},
 	sortFields []string, errCh chan error, needHash bool) (chan *es2.Doc, uint64) {
 	docCh := make(chan *es2.Doc, m.BufferCount)
 	var wg sync.WaitGroup
-	var total atomic.Uint64
-	var waitTotal sync.WaitGroup
+
+	total, err := es.Count(m.GetCtx(), index)
+	if err != nil {
+		errCh <- errors.WithStack(err)
+		close(errCh)
+		close(docCh)
+		return nil, 0
+	}
 
 	if m.SliceSize <= 1 {
 		wg.Add(1)
-		waitTotal.Add(1)
-		m.searchSingleSlice(&wg, &waitTotal, &total, es, index, query, sortFields, nil, nil, docCh, errCh, needHash)
+		m.searchSingleSlice(&wg, es, index, query, sortFields, nil, nil, docCh, errCh, needHash)
 	} else {
 		for i := uint(0); i < m.SliceSize; i++ {
 			idx := i
 			wg.Add(1)
-			waitTotal.Add(1)
-			m.searchSingleSlice(&wg, &waitTotal, &total, es, index, query, sortFields, &idx, &m.SliceSize, docCh, errCh, needHash)
+			m.searchSingleSlice(&wg, es, index, query, sortFields, &idx, &m.SliceSize, docCh, errCh, needHash)
 		}
 	}
 	utils.GoRecovery(m.GetCtx(), func() {
@@ -714,8 +716,7 @@ func (m *Migrator) search(es es2.ES, index string, query map[string]interface{},
 		close(docCh)
 	})
 
-	waitTotal.Wait()
-	return docCh, total.Load()
+	return docCh, total
 }
 
 func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
