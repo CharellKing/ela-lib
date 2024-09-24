@@ -141,6 +141,10 @@ func (es *V0) Get(url string) ([]byte, error) {
 		_ = resp.Body.Close()
 	}()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("failed to get %s, status code: %d", url, resp.StatusCode)
+	}
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.WithStack(err)
