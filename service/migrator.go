@@ -500,7 +500,7 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 			if time.Now().Sub(lastPrintTime) > everyLogTime {
 				sourceProgress := cast.ToFloat32(sourceCount) / cast.ToFloat32(sourceTotal)
 				targetProgress := cast.ToFloat32(targetCount) / cast.ToFloat32(targetTotal)
-				utils.GetLogger(m.GetCtx()).Info("compare source progress %.4f (%d, %d, %d), "+
+				utils.GetLogger(m.GetCtx()).Infof("compare source progress %.4f (%d, %d, %d), "+
 					"target progress %.4f (%d, %d, %d), compare doc cache %d",
 					sourceProgress, sourceCount, sourceTotal, len(sourceDocCh),
 					targetProgress, targetCount, targetTotal, len(targetDocCh), len(compareDocCh))
@@ -745,7 +745,7 @@ func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc,
 		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			utils.GetLogger(m.GetCtx()).Info("bulk progress %.4f (%d, %d, %d)",
+			utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
 				percent, count.Load(), total, len(doc))
 			lastPrintTime = time.Now()
 		}
