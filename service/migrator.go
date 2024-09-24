@@ -16,6 +16,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
+)
+
+const (
+	everyLogTime = 1 * time.Minute
 )
 
 type Migrator struct {
@@ -459,6 +464,7 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 	)
 
 	compareDocCh := make(chan *es2.Doc, m.BufferCount)
+	lastPrintTime := time.Now()
 
 	utils.GoRecovery(m.GetCtx(), func() {
 		bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
@@ -491,10 +497,15 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 				targetDocHashMap[targetResult.ID] = targetResult.Hash
 			}
 
-			sourceProgress := cast.ToFloat32(sourceCount) / cast.ToFloat32(sourceTotal)
-			targetProgress := cast.ToFloat32(targetCount) / cast.ToFloat32(targetTotal)
-			utils.GetLogger(m.GetCtx()).Debugf("compare source progress %.4f, target progress %.4f",
-				sourceProgress, targetProgress)
+			if time.Now().Sub(lastPrintTime) > everyLogTime {
+				sourceProgress := cast.ToFloat32(sourceCount) / cast.ToFloat32(sourceTotal)
+				targetProgress := cast.ToFloat32(targetCount) / cast.ToFloat32(targetTotal)
+				utils.GetLogger(m.GetCtx()).Info("compare source progress %.4f (%d, %d, %d), "+
+					"target progress %.4f (%d, %d, %d), compare doc cache %d",
+					sourceProgress, sourceCount, sourceTotal, len(sourceDocCh),
+					targetProgress, targetCount, targetTotal, len(targetDocCh), len(compareDocCh))
+				lastPrintTime = time.Now()
+			}
 
 			if sourceResult != nil {
 				targetHashValue, ok := targetDocHashMap[sourceResult.ID]
@@ -723,6 +734,7 @@ func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc,
 	operation es2.Operation, errCh chan error) {
 	var buf bytes.Buffer
 
+	lastPrintTime := time.Now()
 	for {
 		v, ok := <-doc
 		if !ok {
@@ -732,8 +744,11 @@ func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc,
 		count.Add(1)
 		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
-		utils.GetLogger(m.GetCtx()).Debugf("bulk progress %.4f", percent)
-
+		if time.Now().Sub(lastPrintTime) > everyLogTime {
+			utils.GetLogger(m.GetCtx()).Info("bulk progress %.4f (%d, %d, %d)",
+				percent, count.Load(), total, len(doc))
+			lastPrintTime = time.Now()
+		}
 		switch operation {
 		case es2.OperationCreate:
 			if err := m.TargetES.BulkBody(m.IndexPair.TargetIndex, &buf, v); err != nil {

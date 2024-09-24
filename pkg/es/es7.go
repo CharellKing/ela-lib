@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/mitchellh/mapstructure"
+	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
 	"io"
 	"log"
@@ -128,12 +129,11 @@ func (es *V7) NewScroll(ctx context.Context, index string, option *ScrollOption)
 		return nil, errors.WithStack(err)
 	}
 
-	var hitDocs []*Doc
-	for _, hit := range scrollResult.Hits.Docs {
+	hitDocs := lop.Map(scrollResult.Hits.Docs, func(hit interface{}, _ int) *Doc {
 		var hitDoc Doc
 		_ = mapstructure.Decode(hit, &hitDoc)
-		hitDocs = append(hitDocs, &hitDoc)
-	}
+		return &hitDoc
+	})
 
 	return &ScrollResult{
 		Total:    uint64(scrollResult.Hits.Total.Value),
@@ -161,12 +161,11 @@ func (es *V7) NextScroll(ctx context.Context, scrollId string, scrollTime uint) 
 		return nil, errors.WithStack(err)
 	}
 
-	var hitDocs []*Doc
-	for _, hit := range scrollResult.Hits.Docs {
+	hitDocs := lop.Map(scrollResult.Hits.Docs, func(hit interface{}, _ int) *Doc {
 		var hitDoc Doc
 		_ = mapstructure.Decode(hit, &hitDoc)
-		hitDocs = append(hitDocs, &hitDoc)
-	}
+		return &hitDoc
+	})
 
 	return &ScrollResult{
 		Total:    uint64(scrollResult.Hits.Total.Value),
