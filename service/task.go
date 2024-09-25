@@ -34,7 +34,8 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithBufferCount(taskCfg.BufferCount).
 		WithWriteParallel(taskCfg.WriteParallelism).
 		WithWriteSize(taskCfg.WriteSize).
-		WithIds(taskCfg.Ids)
+		WithIds(taskCfg.Ids).
+		WithCompareParallelism(taskCfg.CompareParallelism)
 	if taskCfg.IndexPattern != nil {
 		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
 	}

@@ -399,7 +399,7 @@ func (m *BulkMigrator) WithCompareParallelism(compareParallelism uint) *BulkMigr
 		BufferCount:     m.BufferCount,
 		WriteParallel:   m.WriteParallel,
 		Ids:             m.Ids,
-		CompareParallel: compareParallel,
+		CompareParallel: compareParallelism,
 	}
 }
 
@@ -540,7 +540,8 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 			WithBufferCount(m.BufferCount).
 			WithWriteParallel(m.WriteParallel).
 			WithWriteSize(m.WriteSize).
-			WithIds(m.Ids)
+			WithIds(m.Ids).
+			WithCompareParallel(m.CompareParallel)
 
 		pool.Submit(func() {
 			callback(newMigrator)
