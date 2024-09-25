@@ -55,7 +55,7 @@ func (t *TaskMgr) Run(ctx context.Context) error {
 
 	bar := utils.NewProgressBar(ctx, "All tasks", "", len(t.taskCfgs))
 
-	for _, taskCfg := range t.taskCfgs {
+	for idx, taskCfg := range t.taskCfgs {
 		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES])
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
@@ -63,6 +63,7 @@ func (t *TaskMgr) Run(ctx context.Context) error {
 
 		bar.Increment()
 		utils.GetLogger(task.GetCtx()).Debug("task done")
+		utils.GetLogger(ctx).Infof("tasks progress %0.4f (%d, %d)", float64(idx+1)/float64(len(t.taskCfgs)), idx+1, len(t.taskCfgs))
 	}
 
 	bar.Finish()

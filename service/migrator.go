@@ -23,6 +23,15 @@ const (
 	everyLogTime = 1 * time.Minute
 )
 
+const defaultParallelism = 12
+const defaultScrollSize = 2000
+const defaultScrollTime = 10
+const defaultSliceSize = 10
+const defaultBufferCount = 10000
+const defaultWriteParallel = 20
+const defaultWriteSize = 10 // MB
+const defaultCompareParallel = 20
+
 type Migrator struct {
 	err error
 
@@ -40,6 +49,8 @@ type Migrator struct {
 	SliceSize uint
 
 	BufferCount uint
+
+	CompareParallel uint
 
 	WriteParallel uint
 
@@ -67,16 +78,17 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
 	ctx = utils.SetCtxKeyTargetESVersion(ctx, dstES.GetClusterVersion())
 
 	return &Migrator{
-		err:           nil,
-		ctx:           ctx,
-		SourceES:      srcES,
-		TargetES:      dstES,
-		ScrollSize:    defaultScrollSize,
-		ScrollTime:    defaultScrollTime,
-		SliceSize:     defaultSliceSize,
-		BufferCount:   defaultBufferCount,
-		WriteParallel: defaultWriteParallel,
-		WriteSize:     defaultWriteSize,
+		err:             nil,
+		ctx:             ctx,
+		SourceES:        srcES,
+		TargetES:        dstES,
+		ScrollSize:      defaultScrollSize,
+		ScrollTime:      defaultScrollTime,
+		SliceSize:       defaultSliceSize,
+		BufferCount:     defaultBufferCount,
+		WriteParallel:   defaultWriteParallel,
+		WriteSize:       defaultWriteSize,
+		CompareParallel: defaultCompareParallel,
 	}
 }
 
@@ -131,18 +143,19 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 	ctx = m.addDateTimeFixFields(ctx, sourceSetting.GetFieldMap())
 
 	return &Migrator{
-		err:           err,
-		ctx:           ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     indexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           m.Ids,
+		err:             err,
+		ctx:             ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       indexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -151,18 +164,23 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 		return m
 	}
 
+	if scrollSize <= 0 {
+		scrollSize = defaultScrollSize
+	}
+
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    scrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           m.Ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      scrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -171,18 +189,23 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		return m
 	}
 
+	if scrollTime <= 0 {
+		scrollTime = defaultScrollTime
+	}
+
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    scrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           m.Ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      scrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -191,18 +214,22 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		return m
 	}
 
+	if sliceSize <= 0 {
+		sliceSize = defaultSliceSize
+	}
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     sliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           m.Ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       sliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -211,18 +238,22 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		return m
 	}
 
+	if sliceSize <= 0 {
+		sliceSize = defaultBufferCount
+	}
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   sliceSize,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           m.Ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     sliceSize,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -231,18 +262,22 @@ func (m *Migrator) WithWriteParallel(writeParallel uint) *Migrator {
 		return m
 	}
 
+	if writeParallel <= 0 {
+		writeParallel = defaultWriteParallel
+	}
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: writeParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           m.Ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   writeParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -251,18 +286,23 @@ func (m *Migrator) WithWriteSize(writeSize uint) *Migrator {
 		return m
 	}
 
+	if writeSize <= 0 {
+		writeSize = defaultWriteSize
+	}
+
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     writeSize,
-		Ids:           m.Ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       writeSize,
+		Ids:             m.Ids,
+		CompareParallel: m.CompareParallel,
 	}
 }
 
@@ -272,17 +312,42 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		IndexPair:     m.IndexPair,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           ids,
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             ids,
+		CompareParallel: m.CompareParallel,
+	}
+}
+
+func (m *Migrator) WithCompareParallel(compareParallel uint) *Migrator {
+	if m.err != nil {
+		return m
+	}
+
+	if compareParallel <= 0 {
+		compareParallel = defaultCompareParallel
+	}
+	return &Migrator{
+		ctx:             m.ctx,
+		SourceES:        m.SourceES,
+		TargetES:        m.TargetES,
+		IndexPair:       m.IndexPair,
+		ScrollSize:      m.ScrollSize,
+		ScrollTime:      m.ScrollTime,
+		SliceSize:       m.SliceSize,
+		BufferCount:     m.BufferCount,
+		WriteParallel:   m.WriteParallel,
+		WriteSize:       m.WriteSize,
+		Ids:             m.Ids,
+		CompareParallel: compareParallel,
 	}
 }
 
@@ -466,102 +531,104 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 	compareDocCh := make(chan *es2.Doc, m.BufferCount)
 	lastPrintTime := time.Now()
 
-	utils.GoRecovery(m.GetCtx(), func() {
-		bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
-		defer bar.Finish()
+	for i := uint(0); i < m.CompareParallel; i++ {
+		utils.GoRecovery(m.GetCtx(), func() {
+			bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
+			defer bar.Finish()
 
-		for {
-			var (
-				sourceResult *es2.Doc
-				targetResult *es2.Doc
-				op           es2.Operation
-			)
+			for {
+				var (
+					sourceResult *es2.Doc
+					targetResult *es2.Doc
+					op           es2.Operation
+				)
 
-			sourceResult, sourceOk = <-sourceDocCh
-			targetResult, targetOk = <-targetDocCh
+				sourceResult, sourceOk = <-sourceDocCh
+				targetResult, targetOk = <-targetDocCh
 
-			if !sourceOk && !targetOk {
-				close(errCh)
-				break
-			}
+				if !sourceOk && !targetOk {
+					close(errCh)
+					break
+				}
 
-			if sourceResult != nil {
-				bar.Increment()
-				sourceCount++
-				sourceDocHashMap[sourceResult.ID] = sourceResult.Hash
-			}
+				if sourceResult != nil {
+					bar.Increment()
+					sourceCount++
+					sourceDocHashMap[sourceResult.ID] = sourceResult.Hash
+				}
 
-			if targetResult != nil {
-				bar.Increment()
-				targetCount++
-				targetDocHashMap[targetResult.ID] = targetResult.Hash
-			}
+				if targetResult != nil {
+					bar.Increment()
+					targetCount++
+					targetDocHashMap[targetResult.ID] = targetResult.Hash
+				}
 
-			if time.Now().Sub(lastPrintTime) > everyLogTime {
-				sourceProgress := cast.ToFloat32(sourceCount) / cast.ToFloat32(sourceTotal)
-				targetProgress := cast.ToFloat32(targetCount) / cast.ToFloat32(targetTotal)
-				utils.GetLogger(m.GetCtx()).Infof("compare source progress %.4f (%d, %d, %d), "+
-					"target progress %.4f (%d, %d, %d), compare doc cache %d",
-					sourceProgress, sourceCount, sourceTotal, len(sourceDocCh),
-					targetProgress, targetCount, targetTotal, len(targetDocCh), len(compareDocCh))
-				lastPrintTime = time.Now()
-			}
+				if time.Now().Sub(lastPrintTime) > everyLogTime {
+					sourceProgress := cast.ToFloat32(sourceCount) / cast.ToFloat32(sourceTotal)
+					targetProgress := cast.ToFloat32(targetCount) / cast.ToFloat32(targetTotal)
+					utils.GetLogger(m.GetCtx()).Infof("compare source progress %.4f (%d, %d, %d), "+
+						"target progress %.4f (%d, %d, %d), compare doc cache %d",
+						sourceProgress, sourceCount, sourceTotal, len(sourceDocCh),
+						targetProgress, targetCount, targetTotal, len(targetDocCh), len(compareDocCh))
+					lastPrintTime = time.Now()
+				}
 
-			if sourceResult != nil {
-				targetHashValue, ok := targetDocHashMap[sourceResult.ID]
-				if ok {
-					if sourceDocHashMap[sourceResult.ID] != targetHashValue {
-						op = es2.OperationUpdate
-					} else {
-						op = es2.OperationSame
+				if sourceResult != nil {
+					targetHashValue, ok := targetDocHashMap[sourceResult.ID]
+					if ok {
+						if sourceDocHashMap[sourceResult.ID] != targetHashValue {
+							op = es2.OperationUpdate
+						} else {
+							op = es2.OperationSame
+						}
+
+						compareDocCh <- &es2.Doc{
+							ID: sourceResult.ID,
+							Op: op,
+						}
+
+						delete(targetDocHashMap, sourceResult.ID)
+						delete(sourceDocHashMap, sourceResult.ID)
 					}
+				}
 
-					compareDocCh <- &es2.Doc{
-						ID: sourceResult.ID,
-						Op: op,
+				if targetResult != nil {
+					sourceHashValue, ok := sourceDocHashMap[targetResult.ID]
+					if ok {
+						if targetDocHashMap[targetResult.ID] != sourceHashValue {
+							op = es2.OperationUpdate
+						} else {
+							op = es2.OperationSame
+						}
+
+						compareDocCh <- &es2.Doc{
+							ID: targetResult.ID,
+							Op: op,
+						}
+
+						delete(targetDocHashMap, targetResult.ID)
+						delete(sourceDocHashMap, targetResult.ID)
 					}
-
-					delete(targetDocHashMap, sourceResult.ID)
-					delete(sourceDocHashMap, sourceResult.ID)
 				}
 			}
 
-			if targetResult != nil {
-				sourceHashValue, ok := sourceDocHashMap[targetResult.ID]
-				if ok {
-					if targetDocHashMap[targetResult.ID] != sourceHashValue {
-						op = es2.OperationUpdate
-					} else {
-						op = es2.OperationSame
-					}
-
-					compareDocCh <- &es2.Doc{
-						ID: targetResult.ID,
-						Op: op,
-					}
-
-					delete(targetDocHashMap, targetResult.ID)
-					delete(sourceDocHashMap, targetResult.ID)
+			for id := range sourceDocHashMap {
+				compareDocCh <- &es2.Doc{
+					ID: id,
+					Op: es2.OperationCreate,
 				}
 			}
-		}
 
-		for id := range sourceDocHashMap {
-			compareDocCh <- &es2.Doc{
-				ID: id,
-				Op: es2.OperationCreate,
+			for id := range targetDocHashMap {
+				compareDocCh <- &es2.Doc{
+					ID: id,
+					Op: es2.OperationDelete,
+				}
 			}
-		}
 
-		for id := range targetDocHashMap {
-			compareDocCh <- &es2.Doc{
-				ID: id,
-				Op: es2.OperationDelete,
-			}
-		}
-
-		close(compareDocCh)
-	})
+			close(compareDocCh)
+		})
+	}
 
 	return compareDocCh, errsCh
 }
