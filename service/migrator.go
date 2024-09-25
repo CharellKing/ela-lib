@@ -770,6 +770,8 @@ func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc,
 			if err := m.TargetES.Bulk(&buf); err != nil {
 				errCh <- errors.WithStack(err)
 			}
+
+			buf.Reset()
 		}
 	}
 
@@ -777,6 +779,7 @@ func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc,
 		if err := m.TargetES.Bulk(&buf); err != nil {
 			errCh <- errors.WithStack(err)
 		}
+		buf.Reset()
 	}
 }
 
