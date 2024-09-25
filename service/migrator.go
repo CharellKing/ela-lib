@@ -519,13 +519,10 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
 
 	var (
-		sourceOk bool
-		targetOk bool
-
-		sourceCount      uint64
-		targetCount      uint64
-		sourceDocHashMap = make(map[string]string)
-		targetDocHashMap = make(map[string]string)
+		sourceCount      atomic.Uint64
+		targetCount      atomic.Uint64
+		sourceDocHashMap sync.Map
+		targetDocHashMap sync.Map
 	)
 
 	compareDocCh := make(chan *es2.Doc, m.BufferCount)
@@ -541,6 +538,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 					sourceResult *es2.Doc
 					targetResult *es2.Doc
 					op           es2.Operation
+
+					sourceOk bool
+					targetOk bool
 				)
 
 				sourceResult, sourceOk = <-sourceDocCh
@@ -553,30 +553,32 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 
 				if sourceResult != nil {
 					bar.Increment()
-					sourceCount++
-					sourceDocHashMap[sourceResult.ID] = sourceResult.Hash
+					sourceCount.Add(1)
+					sourceDocHashMap.Store(sourceResult.ID, sourceResult.Hash)
 				}
 
 				if targetResult != nil {
 					bar.Increment()
-					targetCount++
-					targetDocHashMap[targetResult.ID] = targetResult.Hash
+					targetCount.Add(1)
+					targetDocHashMap.Store(targetResult.ID, targetResult.Hash)
 				}
 
 				if time.Now().Sub(lastPrintTime) > everyLogTime {
-					sourceProgress := cast.ToFloat32(sourceCount) / cast.ToFloat32(sourceTotal)
-					targetProgress := cast.ToFloat32(targetCount) / cast.ToFloat32(targetTotal)
+					sourceCountValue := sourceCount.Load()
+					targetCountValue := targetCount.Load()
+					sourceProgress := cast.ToFloat32(sourceCountValue) / cast.ToFloat32(sourceTotal)
+					targetProgress := cast.ToFloat32(targetCountValue) / cast.ToFloat32(targetTotal)
 					utils.GetLogger(m.GetCtx()).Infof("compare source progress %.4f (%d, %d, %d), "+
 						"target progress %.4f (%d, %d, %d), compare doc cache %d",
-						sourceProgress, sourceCount, sourceTotal, len(sourceDocCh),
-						targetProgress, targetCount, targetTotal, len(targetDocCh), len(compareDocCh))
+						sourceProgress, sourceCountValue, sourceTotal, len(sourceDocCh),
+						targetProgress, targetCountValue, targetTotal, len(targetDocCh), len(compareDocCh))
 					lastPrintTime = time.Now()
 				}
 
 				if sourceResult != nil {
-					targetHashValue, ok := targetDocHashMap[sourceResult.ID]
+					targetHashValue, ok := targetDocHashMap.Load(sourceResult.ID)
 					if ok {
-						if sourceDocHashMap[sourceResult.ID] != targetHashValue {
+						if sourceResult.Hash != targetHashValue {
 							op = es2.OperationUpdate
 						} else {
 							op = es2.OperationSame
@@ -587,15 +589,15 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 							Op: op,
 						}
 
-						delete(targetDocHashMap, sourceResult.ID)
-						delete(sourceDocHashMap, sourceResult.ID)
+						targetDocHashMap.Delete(sourceResult.ID)
+						sourceDocHashMap.Delete(sourceResult.ID)
 					}
 				}
 
 				if targetResult != nil {
-					sourceHashValue, ok := sourceDocHashMap[targetResult.ID]
+					sourceHashValue, ok := sourceDocHashMap.Load(targetResult.ID)
 					if ok {
-						if targetDocHashMap[targetResult.ID] != sourceHashValue {
+						if targetResult.Hash != sourceHashValue {
 							op = es2.OperationUpdate
 						} else {
 							op = es2.OperationSame
@@ -606,29 +608,36 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 							Op: op,
 						}
 
-						delete(targetDocHashMap, targetResult.ID)
-						delete(sourceDocHashMap, targetResult.ID)
+						targetDocHashMap.Delete(targetResult.ID)
+						sourceDocHashMap.Delete(targetResult.ID)
 					}
 				}
 			}
-
-			for id := range sourceDocHashMap {
-				compareDocCh <- &es2.Doc{
-					ID: id,
-					Op: es2.OperationCreate,
-				}
-			}
-
-			for id := range targetDocHashMap {
-				compareDocCh <- &es2.Doc{
-					ID: id,
-					Op: es2.OperationDelete,
-				}
-			}
-
-			close(compareDocCh)
 		})
 	}
+
+	utils.GoRecovery(m.ctx, func() {
+		<-sourceDocCh
+		<-targetDocCh
+
+		sourceDocHashMap.Range(func(key any, value interface{}) bool {
+			compareDocCh <- &es2.Doc{
+				ID: cast.ToString(key),
+				Op: es2.OperationCreate,
+			}
+			return true
+		})
+
+		targetDocHashMap.Range(func(key any, value interface{}) bool {
+			compareDocCh <- &es2.Doc{
+				ID: cast.ToString(key),
+				Op: es2.OperationDelete,
+			}
+			return true
+		})
+
+		close(compareDocCh)
+	})
 
 	return compareDocCh, errsCh
 }
