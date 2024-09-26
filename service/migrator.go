@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
 	"hash/fnv"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,9 +30,8 @@ const defaultScrollSize = 2000
 const defaultScrollTime = 10
 const defaultSliceSize = 10
 const defaultBufferCount = 10000
-const defaultWriteParallel = 20
-const defaultWriteSize = 10 // MB
-const defaultCompareParallel = 20
+const defaultActionSize = 10 // MB
+const defaultActionParallelism = 20
 
 type Migrator struct {
 	err error
@@ -40,7 +41,7 @@ type Migrator struct {
 	SourceES es2.ES
 	TargetES es2.ES
 
-	IndexPair config.IndexPair
+	IndexPair *config.IndexPair
 
 	ScrollSize uint
 
@@ -50,11 +51,13 @@ type Migrator struct {
 
 	BufferCount uint
 
-	CompareParallel uint
+	ActionSize uint
 
-	WriteParallel uint
+	ActionParallelism uint
 
-	WriteSize uint
+	IndexFilePair *config.IndexFilePair
+
+	FileDir string
 
 	Ids []string
 }
@@ -78,17 +81,16 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
 	ctx = utils.SetCtxKeyTargetESVersion(ctx, dstES.GetClusterVersion())
 
 	return &Migrator{
-		err:             nil,
-		ctx:             ctx,
-		SourceES:        srcES,
-		TargetES:        dstES,
-		ScrollSize:      defaultScrollSize,
-		ScrollTime:      defaultScrollTime,
-		SliceSize:       defaultSliceSize,
-		BufferCount:     defaultBufferCount,
-		WriteParallel:   defaultWriteParallel,
-		WriteSize:       defaultWriteSize,
-		CompareParallel: defaultCompareParallel,
+		err:               nil,
+		ctx:               ctx,
+		SourceES:          srcES,
+		TargetES:          dstES,
+		ScrollSize:        defaultScrollSize,
+		ScrollTime:        defaultScrollTime,
+		SliceSize:         defaultSliceSize,
+		BufferCount:       defaultBufferCount,
+		ActionParallelism: defaultActionParallelism,
+		ActionSize:        defaultActionSize,
 	}
 }
 
@@ -143,19 +145,19 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 	ctx = m.addDateTimeFixFields(ctx, sourceSetting.GetFieldMap())
 
 	return &Migrator{
-		err:             err,
-		ctx:             ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       indexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		err:               err,
+		ctx:               ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         &indexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -169,18 +171,18 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      scrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        scrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -194,18 +196,18 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      scrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        scrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -218,18 +220,18 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		sliceSize = defaultSliceSize
 	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       sliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         sliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -242,67 +244,67 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		sliceSize = defaultBufferCount
 	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     sliceSize,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       sliceSize,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
-func (m *Migrator) WithWriteParallel(writeParallel uint) *Migrator {
+func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 	if m.err != nil {
 		return m
 	}
 
-	if writeParallel <= 0 {
-		writeParallel = defaultWriteParallel
+	if actionParallelism <= 0 {
+		actionParallelism = defaultActionParallelism
 	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   writeParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: actionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
-func (m *Migrator) WithWriteSize(writeSize uint) *Migrator {
+func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 	if m.err != nil {
 		return m
 	}
 
-	if writeSize <= 0 {
-		writeSize = defaultWriteSize
+	if actionSize <= 0 {
+		actionSize = defaultActionSize
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       writeSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        actionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -312,42 +314,39 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
-func (m *Migrator) WithCompareParallel(compareParallel uint) *Migrator {
+func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migrator {
 	if m.err != nil {
 		return m
 	}
 
-	if compareParallel <= 0 {
-		compareParallel = defaultCompareParallel
-	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: compareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     indexFilePair,
 	}
 }
 
@@ -510,7 +509,7 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	lastPrintTime := time.Now()
 
 	var wg sync.WaitGroup
-	for i := uint(0); i < m.CompareParallel; i++ {
+	for i := uint(0); i < m.ActionParallelism; i++ {
 		wg.Add(1)
 		utils.GoRecovery(m.GetCtx(), func() {
 			defer wg.Done()
@@ -818,7 +817,7 @@ func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc,
 			utils.GetLogger(m.ctx).Error("unknown operation")
 		}
 
-		if buf.Len() >= cast.ToInt(m.WriteSize)*1024*1024 {
+		if buf.Len() >= cast.ToInt(m.ActionSize)*1024*1024 {
 			if err := m.TargetES.Bulk(&buf); err != nil {
 				errCh <- errors.WithStack(err)
 			}
@@ -854,18 +853,42 @@ func (m *Migrator) bulkWorker(doc <-chan *es2.Doc, total uint64, operation es2.O
 		cast.ToInt(total))
 	defer bar.Finish()
 
-	if m.WriteParallel <= 1 {
+	if m.ActionParallelism <= 1 {
 		m.singleBulkWorker(bar, doc, total, &count, operation, errCh)
 	}
 
-	wg.Add(cast.ToInt(m.WriteParallel))
-	for i := 0; i < cast.ToInt(m.WriteParallel); i++ {
+	wg.Add(cast.ToInt(m.ActionParallelism))
+	for i := 0; i < cast.ToInt(m.ActionParallelism); i++ {
 		utils.GoRecovery(m.ctx, func() {
 			defer wg.Done()
 			m.singleBulkWorker(bar, doc, total, &count, operation, errCh)
 		})
 	}
 	wg.Wait()
+}
+
+func (m *Migrator) writeSummaryFile(docType string, total uint64) error {
+	filePath := fmt.Sprintf("%s/%s/summary.yaml", m.IndexFilePair.File, docType)
+
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	defer func() {
+		_ = file.Close()
+	}()
+
+	_, err = file.WriteString(fmt.Sprintf("%d\n", total))
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (m *Migrator) bulkFileWorker(doc <-chan *es2.Doc, total uint64, operation es2.Operation, errCh chan error) {
+
 }
 
 func (m *Migrator) syncUpsert(query map[string]interface{}, operation es2.Operation) error {
@@ -911,4 +934,166 @@ func (m *Migrator) GetTargetESSetting(sourceESSetting es2.IESSettings) es2.IESSe
 	}
 
 	return nil
+}
+
+func (m *Migrator) getTotalFromFile(filePath string) (uint64, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	defer func() {
+		_ = file.Close()
+	}()
+
+	scanner := bufio.NewScanner(file)
+	var firstLineText string
+	if scanner.Scan() {
+		firstLineText = scanner.Text()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	total, err := cast.ToUint64E(firstLineText)
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+	return total, nil
+}
+
+func (m *Migrator) getFileContentWithSlice(wg *sync.WaitGroup, filePath string, sliceId *uint, sliceSize *uint, docCh chan *es2.Doc, errCh chan error) {
+	utils.GoRecovery(m.GetCtx(), func() {
+		var (
+			file *os.File
+			err  error
+		)
+
+		file, err = os.OpenFile(filePath, os.O_RDONLY, 0644)
+		if err != nil {
+			errCh <- errors.WithStack(err)
+			return
+		}
+
+		defer func() {
+			wg.Done()
+			_ = file.Close()
+		}()
+
+		var fromLine uint64 = 1
+		if sliceId != nil {
+			fromLine += uint64(*sliceId)
+		}
+
+		var interval uint = 0
+		if sliceSize != nil {
+			interval = *sliceSize
+		}
+
+		_, err = file.Seek(int64(fromLine-1), 0)
+		if err.Error() == "EOF" {
+			return
+		}
+
+		if err != nil {
+			errCh <- errors.WithStack(err)
+			return
+		}
+		for {
+			line, _, err := bufio.NewReader(file).ReadLine()
+			if err.Error() == "EOF" {
+				break
+			}
+
+			if err != nil {
+				errCh <- errors.WithStack(err)
+				break
+			}
+
+			line = bytes.TrimSpace(line)
+			doc := &es2.Doc{}
+			if err := json.Unmarshal(line, doc); err != nil {
+				errCh <- errors.WithStack(err)
+				break
+			}
+
+			docCh <- doc
+
+			// 跳转interval个行， 并且判断是否是最后的 EOF
+			_, err = file.Seek(int64(interval), 1)
+			if err.Error() == "EOF" {
+				break
+			}
+
+			if err != nil {
+				errCh <- errors.WithStack(err)
+				break
+			}
+
+		}
+	})
+}
+
+func (m *Migrator) scrollFile(filePath string, errCh chan error) (chan *es2.Doc, uint64) {
+	docCh := make(chan *es2.Doc, m.BufferCount)
+	var wg sync.WaitGroup
+
+	total, err := m.getTotalFromFile(filePath)
+	if err != nil {
+		errCh <- errors.WithStack(err)
+		close(errCh)
+		close(docCh)
+		return nil, 0
+	}
+
+	if m.SliceSize <= 1 {
+		wg.Add(1)
+		m.getFileContentWithSlice(&wg, filePath, nil, nil, docCh, errCh)
+	} else {
+		for i := uint(0); i < m.SliceSize; i++ {
+			idx := i
+			wg.Add(1)
+			m.getFileContentWithSlice(&wg, filePath, &idx, &m.SliceSize, docCh, errCh)
+		}
+	}
+	utils.GoRecovery(m.GetCtx(), func() {
+		wg.Wait()
+		close(docCh)
+	})
+
+	return docCh, total
+}
+
+func (m *Migrator) Import() error {
+	errCh := make(chan error)
+	errsCh := m.handleMultipleErrors(errCh)
+
+	var (
+		docCh chan *es2.Doc
+		total uint64
+	)
+
+	docCh, total = m.scrollFile(m.IndexFilePair.File, errCh)
+	m.bulkWorker(docCh, total, es2.OperationCreate, errCh)
+	close(errCh)
+	errs := <-errsCh
+	return errs.Ret()
+}
+
+func (m *Migrator) Export() error {
+	errCh := make(chan error)
+	errsCh := m.handleMultipleErrors(errCh)
+
+	var (
+		docCh chan *es2.Doc
+		total uint64
+	)
+
+	query := getQueryMap(m.Ids)
+	docCh, total = m.search(m.SourceES, m.IndexPair.SourceIndex, query, nil, errCh, false)
+	m.bulkWorker(docCh, total, operation, errCh)
+	close(errCh)
+	errs := <-errsCh
+	return errs.Ret()
 }

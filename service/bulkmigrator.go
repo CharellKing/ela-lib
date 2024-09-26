@@ -26,6 +26,8 @@ type BulkMigrator struct {
 
 	IndexPairMap map[string]*config.IndexPair
 
+	IndexFilePairMap map[string]*config.IndexFilePair
+
 	Error error
 
 	ScrollSize uint
@@ -36,13 +38,13 @@ type BulkMigrator struct {
 
 	BufferCount uint
 
-	WriteParallel uint
+	ActionSize uint
 
-	WriteSize uint
+	ActionParallelism uint
 
 	Ids []string
 
-	CompareParallel uint
+	Pattern string
 }
 
 func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES) *BulkMigrator {
@@ -50,19 +52,18 @@ func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES) *Bulk
 	ctx = utils.SetCtxKeyTargetESVersion(ctx, targetES.GetClusterVersion())
 
 	return &BulkMigrator{
-		ctx:             ctx,
-		SourceES:        sourceES,
-		TargetES:        targetES,
-		Parallelism:     defaultParallelism,
-		IndexPairMap:    make(map[string]*config.IndexPair),
-		Error:           nil,
-		ScrollSize:      defaultScrollSize,
-		ScrollTime:      defaultScrollTime,
-		SliceSize:       defaultSliceSize,
-		BufferCount:     defaultBufferCount,
-		WriteParallel:   defaultWriteParallel,
-		WriteSize:       defaultWriteSize,
-		CompareParallel: defaultCompareParallel,
+		ctx:               ctx,
+		SourceES:          sourceES,
+		TargetES:          targetES,
+		Parallelism:       defaultParallelism,
+		IndexPairMap:      make(map[string]*config.IndexPair),
+		Error:             nil,
+		ScrollSize:        defaultScrollSize,
+		ScrollTime:        defaultScrollTime,
+		SliceSize:         defaultSliceSize,
+		BufferCount:       defaultBufferCount,
+		ActionSize:        defaultActionSize,
+		ActionParallelism: defaultActionParallelism,
 	}
 }
 
@@ -94,20 +95,21 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 	}
 
 	newBulkMigrator := &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexPair)
@@ -124,6 +126,42 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 	return newBulkMigrator
 }
 
+func (m *BulkMigrator) WithIndexFilePairs(indexFilePairs ...*config.IndexFilePair) *BulkMigrator {
+	if m.Error != nil {
+		return m
+	}
+
+	newBulkMigrator := &BulkMigrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
+	}
+
+	newIndexPairsMap := make(map[string]*config.IndexFilePair)
+	for _, importIndexFilePair := range indexFilePairs {
+		if _, ok := newIndexPairsMap[importIndexFilePair.Index]; !ok {
+			newIndexPairsMap[importIndexFilePair.Index] = importIndexFilePair
+		}
+	}
+
+	if len(newIndexPairsMap) > 0 {
+		newBulkMigrator.IndexFilePairMap = lo.Assign(newBulkMigrator.IndexFilePairMap, newIndexPairsMap)
+	}
+	return newBulkMigrator
+}
+
 func (m *BulkMigrator) WithScrollSize(scrollSize uint) *BulkMigrator {
 	if m.Error != nil {
 		return m
@@ -134,20 +172,21 @@ func (m *BulkMigrator) WithScrollSize(scrollSize uint) *BulkMigrator {
 	}
 
 	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      scrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        scrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 }
 
@@ -160,20 +199,21 @@ func (m *BulkMigrator) WithScrollTime(scrollTime uint) *BulkMigrator {
 		scrollTime = defaultScrollTime
 	}
 	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      scrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        scrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 }
 
@@ -186,20 +226,21 @@ func (m *BulkMigrator) WithSliceSize(sliceSize uint) *BulkMigrator {
 		sliceSize = defaultSliceSize
 	}
 	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       sliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         sliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 }
 
@@ -212,73 +253,77 @@ func (m *BulkMigrator) WithBufferCount(bufferCount uint) *BulkMigrator {
 		bufferCount = defaultBufferCount
 	}
 	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     bufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       bufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 }
 
-func (m *BulkMigrator) WithWriteParallel(writeParallel uint) *BulkMigrator {
+func (m *BulkMigrator) WithActionParallelism(actionParallelism uint) *BulkMigrator {
 	if m.Error != nil {
 		return m
 	}
 
-	if writeParallel == 0 {
-		writeParallel = defaultWriteParallel
+	if actionParallelism == 0 {
+		actionParallelism = defaultActionParallelism
 	}
+
 	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   writeParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		ActionParallelism: actionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 }
 
-func (m *BulkMigrator) WithWriteSize(writeSize uint) *BulkMigrator {
+func (m *BulkMigrator) WithActionSize(actionSize uint) *BulkMigrator {
 	if m.Error != nil {
 		return m
 	}
 
-	if writeSize == 0 {
-		writeSize = defaultWriteSize
+	if actionSize == 0 {
+		actionSize = defaultActionSize
 	}
 
 	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       writeSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        actionSize,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
 	}
 }
 
@@ -314,22 +359,207 @@ func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
 	}
 
 	newBulkMigrator := &BulkMigrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		Parallelism:   m.Parallelism,
-		IndexPairMap:  m.IndexPairMap,
-		Error:         m.Error,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		Ids:           m.Ids,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           pattern,
 	}
 
+	return newBulkMigrator
+}
+
+func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
+	if m.Error != nil {
+		return m
+	}
+
+	if parallelism == 0 {
+		parallelism = defaultParallelism
+	}
+	return &BulkMigrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
+	}
+}
+
+func (m *BulkMigrator) WithIds(ids []string) *BulkMigrator {
+	if m.Error != nil {
+		return m
+	}
+
+	return &BulkMigrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
+	}
+}
+
+func (m *BulkMigrator) Sync(force bool) error {
+	newBulkMigrator := m.getIndexPairsFromPattern()
+	if newBulkMigrator.Error != nil {
+		return errors.WithStack(newBulkMigrator.Error)
+	}
+
+	bar := utils.NewProgressBar(newBulkMigrator.ctx, "All tasks", "", len(newBulkMigrator.IndexPairMap))
+	defer bar.Finish()
+
+	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
+		if err := migrator.Sync(force); err != nil {
+			utils.GetLogger(migrator.GetCtx()).Errorf("sync %+v", err)
+		}
+	})
+	return nil
+}
+
+func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
+	newBulkMigrator := m.getIndexPairsFromPattern()
+	if newBulkMigrator.Error != nil {
+		return nil, errors.WithStack(newBulkMigrator.Error)
+	}
+
+	bar := utils.NewProgressBar(newBulkMigrator.ctx, "All Task", "", len(newBulkMigrator.IndexPairMap))
+	defer bar.Finish()
+
+	var diffMap sync.Map
+	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
+		diffResult, err := migrator.SyncDiff()
+		if err != nil {
+			utils.GetLogger(migrator.GetCtx()).Errorf("syncDiff %+v", err)
+			return
+		}
+		if diffResult.HasDiff() {
+			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), diffResult)
+		} else {
+			utils.GetLogger(migrator.GetCtx()).Info("no difference")
+		}
+	})
+
+	result := make(map[string]*DiffResult)
+	diffMap.Range(func(key, value interface{}) bool {
+		keyStr := cast.ToString(key)
+		result[keyStr] = value.(*DiffResult)
+		return true
+	})
+
+	return result, nil
+}
+
+func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
+	newBulkMigrator := m.getIndexPairsFromPattern()
+	if newBulkMigrator.Error != nil {
+		return nil, errors.WithStack(newBulkMigrator.Error)
+	}
+
+	var diffMap sync.Map
+
+	bar := utils.NewProgressBar(newBulkMigrator.ctx, "All Task", "", len(newBulkMigrator.IndexPairMap))
+	defer bar.Finish()
+
+	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
+		diffResult, err := migrator.Compare()
+		if err != nil {
+			utils.GetLogger(newBulkMigrator.GetCtx()).Errorf("compare %+v", err)
+			return
+		}
+		if diffResult.HasDiff() {
+			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), diffResult)
+		} else {
+			utils.GetLogger(migrator.GetCtx()).Info("no difference")
+		}
+	})
+
+	result := make(map[string]*DiffResult)
+
+	diffMap.Range(func(key, value interface{}) bool {
+		keyStr := cast.ToString(key)
+		result[keyStr] = value.(*DiffResult)
+		return true
+	})
+
+	return result, nil
+}
+
+func (m *BulkMigrator) CopyIndexSettings(force bool) error {
+	newBulkMigrator := m.getIndexPairsFromPattern()
+	if newBulkMigrator.Error != nil {
+		return errors.WithStack(newBulkMigrator.Error)
+	}
+
+	bar := utils.NewProgressBar(newBulkMigrator.ctx, "All Task", "", len(newBulkMigrator.IndexPairMap))
+	defer bar.Finish()
+
+	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
+		if err := migrator.CopyIndexSettings(force); err != nil {
+			utils.GetLogger(migrator.GetCtx()).Errorf("copyIndexSettings %+v", err)
+		}
+	})
+	return nil
+}
+
+func (m *BulkMigrator) clone() *BulkMigrator {
+	return &BulkMigrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		ActionParallelism: m.ActionParallelism,
+	}
+}
+
+func (m *BulkMigrator) getIndexPairsFromPattern() *BulkMigrator {
+	if m.Error != nil {
+		return m
+	}
+
+	var newBulkMigrator = m.clone()
 	var filterIndexes []string
-	filterIndexes, newBulkMigrator.Error = m.filterIndexes(pattern)
+
+	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Pattern)
 	if newBulkMigrator.Error != nil {
 		return newBulkMigrator
 	}
@@ -350,181 +580,38 @@ func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
 	if len(newIndexPairsMap) > 0 {
 		newBulkMigrator.IndexPairMap = lo.Assign(newBulkMigrator.IndexPairMap, newIndexPairsMap)
 	}
-
 	return newBulkMigrator
 }
 
-func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
+func (m *BulkMigrator) getIndexFilePairFromPattern() *BulkMigrator {
 	if m.Error != nil {
 		return m
 	}
 
-	if parallelism == 0 {
-		parallelism = defaultParallelism
-	}
-	return &BulkMigrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		Parallelism:   parallelism,
-		IndexPairMap:  m.IndexPairMap,
-		Error:         m.Error,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		Ids:           m.Ids,
-	}
-}
+	var newBulkMigrator = m.clone()
+	var filterIndexes []string
 
-func (m *BulkMigrator) WithCompareParallelism(compareParallelism uint) *BulkMigrator {
-	if m.Error != nil {
-		return m
+	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Pattern)
+	if newBulkMigrator.Error != nil {
+		return newBulkMigrator
 	}
 
-	if compareParallelism == 0 {
-		compareParallelism = defaultCompareParallel
-	}
-	return &BulkMigrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		Parallelism:     m.Parallelism,
-		IndexPairMap:    m.IndexPairMap,
-		Error:           m.Error,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		Ids:             m.Ids,
-		CompareParallel: compareParallelism,
-	}
-}
+	newIndexPairsMap := make(map[string]*config.IndexFilePair)
+	for _, index := range filterIndexes {
 
-func (m *BulkMigrator) WithIds(ids []string) *BulkMigrator {
-	if m.Error != nil {
-		return m
-	}
-
-	return &BulkMigrator{
-		ctx:           m.ctx,
-		SourceES:      m.SourceES,
-		TargetES:      m.TargetES,
-		Parallelism:   m.Parallelism,
-		IndexPairMap:  m.IndexPairMap,
-		Error:         m.Error,
-		ScrollSize:    m.ScrollSize,
-		ScrollTime:    m.ScrollTime,
-		SliceSize:     m.SliceSize,
-		BufferCount:   m.BufferCount,
-		WriteParallel: m.WriteParallel,
-		WriteSize:     m.WriteSize,
-		Ids:           ids,
-	}
-}
-
-func (m *BulkMigrator) Sync(force bool) error {
-	if m.Error != nil {
-		return errors.WithStack(m.Error)
-	}
-
-	bar := utils.NewProgressBar(m.ctx, "All tasks", "", len(m.IndexPairMap))
-	defer bar.Finish()
-
-	m.parallelRun(func(migrator *Migrator) {
-		defer bar.Increment()
-		if err := migrator.Sync(force); err != nil {
-			utils.GetLogger(migrator.GetCtx()).Errorf("sync %+v", err)
+		indexPair := &config.IndexFilePair{
+			Index: index,
+			File:  fmt.Sprintf("%s/%s", m.Pattern, index),
 		}
-	})
-	return nil
-}
-
-func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
-	if m.Error != nil {
-		return nil, errors.WithStack(m.Error)
+		if _, ok := newBulkMigrator.IndexPairMap[index]; !ok {
+			newIndexPairsMap[index] = indexPair
+		}
 	}
 
-	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
-	defer bar.Finish()
-
-	var diffMap sync.Map
-	m.parallelRun(func(migrator *Migrator) {
-		defer bar.Increment()
-		diffResult, err := migrator.SyncDiff()
-		if err != nil {
-			utils.GetLogger(migrator.GetCtx()).Errorf("syncDiff %+v", err)
-			return
-		}
-		if diffResult.HasDiff() {
-			diffMap.Store(m.getIndexPairKey(&migrator.IndexPair), diffResult)
-		} else {
-			utils.GetLogger(migrator.GetCtx()).Info("no difference")
-		}
-	})
-
-	result := make(map[string]*DiffResult)
-	diffMap.Range(func(key, value interface{}) bool {
-		keyStr := cast.ToString(key)
-		result[keyStr] = value.(*DiffResult)
-		return true
-	})
-
-	return result, nil
-}
-
-func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
-	if m.Error != nil {
-		return nil, errors.WithStack(m.Error)
+	if len(newIndexPairsMap) > 0 {
+		newBulkMigrator.IndexFilePairMap = lo.Assign(newBulkMigrator.IndexFilePairMap, newIndexPairsMap)
 	}
-
-	var diffMap sync.Map
-
-	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
-	defer bar.Finish()
-
-	m.parallelRun(func(migrator *Migrator) {
-		defer bar.Increment()
-		diffResult, err := migrator.Compare()
-		if err != nil {
-			utils.GetLogger(m.GetCtx()).Errorf("compare %+v", err)
-			return
-		}
-		if diffResult.HasDiff() {
-			diffMap.Store(m.getIndexPairKey(&migrator.IndexPair), diffResult)
-		} else {
-			utils.GetLogger(migrator.GetCtx()).Info("no difference")
-		}
-	})
-
-	result := make(map[string]*DiffResult)
-
-	diffMap.Range(func(key, value interface{}) bool {
-		keyStr := cast.ToString(key)
-		result[keyStr] = value.(*DiffResult)
-		return true
-	})
-
-	return result, nil
-}
-
-func (m *BulkMigrator) CopyIndexSettings(force bool) error {
-	if m.Error != nil {
-		return errors.WithStack(m.Error)
-	}
-
-	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexPairMap))
-	defer bar.Finish()
-
-	m.parallelRun(func(migrator *Migrator) {
-		defer bar.Increment()
-		if err := migrator.CopyIndexSettings(force); err != nil {
-			utils.GetLogger(migrator.GetCtx()).Errorf("copyIndexSettings %+v", err)
-		}
-	})
-	return nil
+	return newBulkMigrator
 }
 
 func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
@@ -538,10 +625,9 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 			WithScrollTime(m.ScrollTime).
 			WithSliceSize(m.SliceSize).
 			WithBufferCount(m.BufferCount).
-			WithWriteParallel(m.WriteParallel).
-			WithWriteSize(m.WriteSize).
-			WithIds(m.Ids).
-			WithCompareParallel(m.CompareParallel)
+			WithActionParallelism(m.ActionParallelism).
+			WithActionSize(m.ActionSize).
+			WithIds(m.Ids)
 
 		pool.Submit(func() {
 			callback(newMigrator)
@@ -550,4 +636,40 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 		})
 	}
 	pool.StopAndWait()
+}
+
+func (m *BulkMigrator) Import() error {
+	newBulkMigrator := m.getIndexFilePairFromPattern()
+	if newBulkMigrator.Error != nil {
+		return errors.WithStack(newBulkMigrator.Error)
+	}
+
+	bar := utils.NewProgressBar(m.ctx, "All Task", "", len(m.IndexFilePairMap))
+	defer bar.Finish()
+
+	m.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
+		if err := migrator.Import(); err != nil {
+			utils.GetLogger(migrator.GetCtx()).Errorf("import %+v", err)
+		}
+	})
+	return nil
+}
+
+func (m *BulkMigrator) Export() error {
+	newBulkMigrator := m.getIndexFilePairFromPattern()
+	if newBulkMigrator.Error != nil {
+		return errors.WithStack(newBulkMigrator.Error)
+	}
+
+	bar := utils.NewProgressBar(newBulkMigrator.ctx, "All Task", "", len(newBulkMigrator.IndexFilePairMap))
+	defer bar.Finish()
+
+	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+		defer bar.Increment()
+		if err := migrator.Export(); err != nil {
+			utils.GetLogger(migrator.GetCtx()).Errorf("export %+v", err)
+		}
+	})
+	return nil
 }

@@ -32,10 +32,9 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithScrollTime(taskCfg.ScrollTime).
 		WithSliceSize(taskCfg.SliceSize).
 		WithBufferCount(taskCfg.BufferCount).
-		WithWriteParallel(taskCfg.WriteParallelism).
-		WithWriteSize(taskCfg.WriteSize).
-		WithIds(taskCfg.Ids).
-		WithCompareParallelism(taskCfg.CompareParallelism)
+		WithActionParallelism(taskCfg.WriteParallelism).
+		WithActionSize(taskCfg.WriteSize).
+		WithIds(taskCfg.Ids)
 	if taskCfg.IndexPattern != nil {
 		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
 	}
@@ -46,7 +45,7 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 	}
 }
 
-func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config, allTaskProgress *utils.ProgressBar) (*Task, error) {
+func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config) (*Task, error) {
 	if cfg == nil {
 		return nil, nil
 
@@ -86,6 +85,14 @@ func (t *Task) CopyIndexSettings() error {
 	return t.bulkMigrator.CopyIndexSettings(t.force)
 }
 
+func (t *Task) Import() error {
+	return t.bulkMigrator.Import()
+}
+
+func (t *Task) Export() error {
+	return t.bulkMigrator.Export()
+}
+
 func (t *Task) Run() error {
 	ctx := t.GetCtx()
 	taskAction := config.TaskAction(utils.GetCtxKeyTaskAction(ctx))
@@ -106,9 +113,9 @@ func (t *Task) Run() error {
 				WithField("sourceIndex", indexArray[0]).
 				WithField("targetIndex", indexArray[1]).
 				WithField("percent", diffResult.Percent()).
-				WithField("create", diffResult.CreateCount).
-				WithField("update", diffResult.UpdateCount).
-				WithField("delete", diffResult.DeleteCount).
+				WithField("create", diffResult.CreateCount.Load()).
+				WithField("update", diffResult.UpdateCount.Load()).
+				WithField("delete", diffResult.DeleteCount.Load()).
 				WithField("createDocs", diffResult.CreateDocs).
 				WithField("updateDocs", diffResult.UpdateDocs).
 				WithField("deleteDocs", diffResult.DeleteDocs).
@@ -126,14 +133,18 @@ func (t *Task) Run() error {
 				WithField("sourceIndex", indexArray[0]).
 				WithField("targetIndex", indexArray[1]).
 				WithField("percent", diffResult.Percent()).
-				WithField("create", diffResult.CreateCount).
-				WithField("update", diffResult.UpdateCount).
-				WithField("delete", diffResult.DeleteCount).
+				WithField("create", diffResult.CreateCount.Load()).
+				WithField("update", diffResult.UpdateCount.Load()).
+				WithField("delete", diffResult.DeleteCount.Load()).
 				WithField("createDocs", diffResult.CreateDocs).
 				WithField("updateDocs", diffResult.UpdateDocs).
 				WithField("deleteDocs", diffResult.DeleteDocs).
 				Info("difference")
 		}
+	case config.TaskActionImport:
+		return t.Import()
+	case config.TaskActionExport:
+		return t.Export()
 	default:
 		taskName := utils.GetCtxKeyTaskName(ctx)
 		return fmt.Errorf("%s invalid task action %s", taskName, taskAction)
