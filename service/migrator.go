@@ -3,8 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/CharellKing/ela-lib/config"
@@ -14,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
+	"hash/fnv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -458,10 +457,11 @@ func (m *Migrator) getKeywordFields() ([]string, error) {
 	return keywordFields, nil
 }
 
-func (m *Migrator) getDocHash(doc *es2.Doc) string {
+func (m *Migrator) getDocHash(doc *es2.Doc) uint64 {
+	h := fnv.New64a()
 	jsonData, _ := json.Marshal(doc.Source)
-	hash := md5.Sum(jsonData)
-	return hex.EncodeToString(hash[:])
+	_, _ = h.Write(jsonData)
+	return h.Sum64()
 }
 
 func (m *Migrator) handleMultipleErrors(errCh chan error) chan utils.Errs {
