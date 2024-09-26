@@ -10,6 +10,7 @@ import (
 	"github.com/CharellKing/ela-lib/config"
 	es2 "github.com/CharellKing/ela-lib/pkg/es"
 	"github.com/CharellKing/ela-lib/utils"
+	"github.com/bytedance/gopkg/collection/skipmap"
 	"github.com/pkg/errors"
 	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
@@ -498,12 +499,13 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
 
 	var (
-		sourceCount      atomic.Uint64
-		targetCount      atomic.Uint64
-		sourceDocHashMap sync.Map
-		targetDocHashMap sync.Map
-		diffResult       DiffResult
+		sourceCount atomic.Uint64
+		targetCount atomic.Uint64
+		diffResult  DiffResult
 	)
+
+	sourceDocHashMap := skipmap.NewString()
+	targetDocHashMap := skipmap.NewString()
 
 	lastPrintTime := time.Now()
 
@@ -592,8 +594,8 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	wg.Add(1)
 	utils.GoRecovery(m.ctx, func() {
 		defer wg.Done()
-		sourceDocHashMap.Range(func(key any, value interface{}) bool {
-			diffResult.addCreateDoc(cast.ToString(key))
+		sourceDocHashMap.Range(func(key string, value interface{}) bool {
+			diffResult.addCreateDoc(key)
 			return true
 		})
 	})
@@ -601,7 +603,7 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	wg.Add(1)
 	utils.GoRecovery(m.ctx, func() {
 		defer wg.Done()
-		targetDocHashMap.Range(func(key any, value interface{}) bool {
+		targetDocHashMap.Range(func(key string, value interface{}) bool {
 			diffResult.addDeleteDoc(cast.ToString(key))
 			return true
 		})
