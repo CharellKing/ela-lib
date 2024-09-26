@@ -528,8 +528,11 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 	compareDocCh := make(chan *es2.Doc, m.BufferCount)
 	lastPrintTime := time.Now()
 
+	var wg sync.WaitGroup
 	for i := uint(0); i < m.CompareParallel; i++ {
+		wg.Add(1)
 		utils.GoRecovery(m.GetCtx(), func() {
+			defer wg.Done()
 			bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
 			defer bar.Finish()
 
@@ -617,9 +620,7 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 	}
 
 	utils.GoRecovery(m.ctx, func() {
-		<-sourceDocCh
-		<-targetDocCh
-
+		wg.Wait()
 		sourceDocHashMap.Range(func(key any, value interface{}) bool {
 			compareDocCh <- &es2.Doc{
 				ID: cast.ToString(key),
