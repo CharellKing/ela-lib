@@ -546,7 +546,7 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 		pool.Submit(func() {
 			callback(newMigrator)
 			finishCount.Add(1)
-			utils.GetLogger(m.ctx).Infof("task progress %0.4f (%d, %d)", float64(finishCount.Load())/float64(len(m.IndexPairMap)), finishCount.Load(), len(m.IndexPairMap))
+			utils.GetLogger(newMigrator.GetCtx()).Infof("task progress %0.4f (%d, %d)", float64(finishCount.Load())/float64(len(m.IndexPairMap)), finishCount.Load(), len(m.IndexPairMap))
 		})
 	}
 	pool.StopAndWait()

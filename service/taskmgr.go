@@ -63,7 +63,7 @@ func (t *TaskMgr) Run(ctx context.Context) error {
 
 		bar.Increment()
 		utils.GetLogger(task.GetCtx()).Debug("task done")
-		utils.GetLogger(ctx).Infof("tasks progress %0.4f (%d, %d)", float64(idx+1)/float64(len(t.taskCfgs)), idx+1, len(t.taskCfgs))
+		utils.GetLogger(task.GetCtx()).Infof("tasks progress %0.4f (%d, %d)", float64(idx+1)/float64(len(t.taskCfgs)), idx+1, len(t.taskCfgs))
 	}
 
 	bar.Finish()
