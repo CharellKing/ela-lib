@@ -679,7 +679,7 @@ func (m *Migrator) Sync(force bool) error {
 
 	utils.GetLogger(m.ctx).Debugf("sync with force: %+v", force)
 	if err := m.CopyIndexSettings(force); err != nil {
-		return errors.WithStack(err)
+		utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
 	}
 	if err := m.syncUpsert(getQueryMap(m.Ids), es2.OperationCreate); err != nil {
 		return errors.WithStack(err)
