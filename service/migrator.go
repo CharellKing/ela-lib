@@ -530,7 +530,6 @@ func (m *Migrator) compare() (*DiffResult, error) {
 				targetResult, targetOk = <-targetDocCh
 
 				if !sourceOk && !targetOk {
-					close(errCh)
 					break
 				}
 
@@ -590,6 +589,7 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	}
 
 	wg.Wait()
+	close(errCh)
 
 	wg.Add(1)
 	utils.GoRecovery(m.ctx, func() {
