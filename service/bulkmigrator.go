@@ -436,7 +436,7 @@ func (m *BulkMigrator) Sync(force bool) error {
 	m.parallelRun(func(migrator *Migrator) {
 		defer bar.Increment()
 		if err := migrator.Sync(force); err != nil {
-			utils.GetLogger(migrator.GetCtx()).WithError(err).Error("sync")
+			utils.GetLogger(migrator.GetCtx()).Errorf("sync %+v", err)
 		}
 	})
 	return nil
@@ -455,7 +455,7 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 		defer bar.Increment()
 		diffResult, err := migrator.SyncDiff()
 		if err != nil {
-			utils.GetLogger(migrator.GetCtx()).WithError(err).Info("syncDiff")
+			utils.GetLogger(migrator.GetCtx()).Errorf("syncDiff %+v", err)
 			return
 		}
 		if diffResult.HasDiff() {
@@ -489,7 +489,7 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 		defer bar.Increment()
 		diffResult, err := migrator.Compare()
 		if err != nil {
-			utils.GetLogger(m.GetCtx()).WithError(err).Info("compare")
+			utils.GetLogger(m.GetCtx()).Errorf("compare %+v", err)
 			return
 		}
 		if diffResult.HasDiff() {
@@ -521,7 +521,7 @@ func (m *BulkMigrator) CopyIndexSettings(force bool) error {
 	m.parallelRun(func(migrator *Migrator) {
 		defer bar.Increment()
 		if err := migrator.CopyIndexSettings(force); err != nil {
-			utils.GetLogger(migrator.GetCtx()).WithError(err).Error("copyIndexSettings")
+			utils.GetLogger(migrator.GetCtx()).Errorf("copyIndexSettings %+v", err)
 		}
 	})
 	return nil

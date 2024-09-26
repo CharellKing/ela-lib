@@ -395,30 +395,11 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 		return nil, errors.WithStack(m.err)
 	}
 
-	var diffResult DiffResult
-
-	docCh, errsCh := m.compare()
-	for {
-		doc, ok := <-docCh
-		if !ok {
-			break
-		}
-		switch doc.Op {
-		case es2.OperationSame:
-			diffResult.SameCount += 1
-		case es2.OperationCreate:
-			diffResult.CreateCount += 1
-			diffResult.CreateDocs = append(diffResult.CreateDocs, doc.ID)
-		case es2.OperationUpdate:
-			diffResult.UpdateCount += 1
-			diffResult.UpdateDocs = append(diffResult.UpdateDocs, doc.ID)
-		case es2.OperationDelete:
-			diffResult.DeleteCount += 1
-			diffResult.DeleteDocs = append(diffResult.DeleteDocs, doc.ID)
-		}
+	var errs utils.Errs
+	diffResult, err := m.compare()
+	if err != nil {
+		errs.Add(err)
 	}
-
-	errs := <-errsCh
 
 	if len(diffResult.CreateDocs) > 0 {
 		utils.GetLogger(m.ctx).Debugf("sync with create docs: %+v", len(diffResult.CreateDocs))
@@ -440,7 +421,7 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 			errs.Add(errors.WithStack(err))
 		}
 	}
-	return &diffResult, errs.Ret()
+	return diffResult, errs.Ret()
 }
 
 func (m *Migrator) getESIndexFields(es es2.ES) (map[string]interface{}, error) {
@@ -501,16 +482,14 @@ func (m *Migrator) handleMultipleErrors(errCh chan error) chan utils.Errs {
 	return errsCh
 }
 
-func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
-	errCh := make(chan error)
-	errsCh := m.handleMultipleErrors(errCh)
-
+func (m *Migrator) compare() (*DiffResult, error) {
 	keywordFields, err := m.getKeywordFields()
 	if err != nil {
-		errCh <- errors.WithStack(err)
-		close(errCh)
-		return nil, errsCh
+		return nil, errors.WithStack(err)
 	}
+
+	errCh := make(chan error)
+	errsCh := m.handleMultipleErrors(errCh)
 
 	queryMap := getQueryMap(m.Ids)
 
@@ -523,9 +502,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 		targetCount      atomic.Uint64
 		sourceDocHashMap sync.Map
 		targetDocHashMap sync.Map
+		diffResult       DiffResult
 	)
 
-	compareDocCh := make(chan *es2.Doc, m.BufferCount)
 	lastPrintTime := time.Now()
 
 	var wg sync.WaitGroup
@@ -540,7 +519,6 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 				var (
 					sourceResult *es2.Doc
 					targetResult *es2.Doc
-					op           es2.Operation
 
 					sourceOk bool
 					targetOk bool
@@ -572,9 +550,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 					sourceProgress := cast.ToFloat32(sourceCountValue) / cast.ToFloat32(sourceTotal)
 					targetProgress := cast.ToFloat32(targetCountValue) / cast.ToFloat32(targetTotal)
 					utils.GetLogger(m.GetCtx()).Infof("compare source progress %.4f (%d, %d, %d), "+
-						"target progress %.4f (%d, %d, %d), compare doc cache %d",
+						"target progress %.4f (%d, %d, %d)",
 						sourceProgress, sourceCountValue, sourceTotal, len(sourceDocCh),
-						targetProgress, targetCountValue, targetTotal, len(targetDocCh), len(compareDocCh))
+						targetProgress, targetCountValue, targetTotal, len(targetDocCh))
 					lastPrintTime = time.Now()
 				}
 
@@ -582,14 +560,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 					targetHashValue, ok := targetDocHashMap.Load(sourceResult.ID)
 					if ok {
 						if sourceResult.Hash != targetHashValue {
-							op = es2.OperationUpdate
+							diffResult.addUpdateDoc(sourceResult.ID)
 						} else {
-							op = es2.OperationSame
-						}
-
-						compareDocCh <- &es2.Doc{
-							ID: sourceResult.ID,
-							Op: op,
+							diffResult.SameCount.Add(1)
 						}
 
 						targetDocHashMap.Delete(sourceResult.ID)
@@ -601,14 +574,9 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 					sourceHashValue, ok := sourceDocHashMap.Load(targetResult.ID)
 					if ok {
 						if targetResult.Hash != sourceHashValue {
-							op = es2.OperationUpdate
+							diffResult.addUpdateDoc(targetResult.ID)
 						} else {
-							op = es2.OperationSame
-						}
-
-						compareDocCh <- &es2.Doc{
-							ID: targetResult.ID,
-							Op: op,
+							diffResult.SameCount.Add(1)
 						}
 
 						targetDocHashMap.Delete(targetResult.ID)
@@ -619,51 +587,78 @@ func (m *Migrator) compare() (chan *es2.Doc, chan utils.Errs) {
 		})
 	}
 
+	wg.Wait()
+
+	wg.Add(1)
 	utils.GoRecovery(m.ctx, func() {
-		wg.Wait()
+		defer wg.Done()
 		sourceDocHashMap.Range(func(key any, value interface{}) bool {
-			compareDocCh <- &es2.Doc{
-				ID: cast.ToString(key),
-				Op: es2.OperationCreate,
-			}
+			diffResult.addCreateDoc(cast.ToString(key))
 			return true
 		})
-
-		targetDocHashMap.Range(func(key any, value interface{}) bool {
-			compareDocCh <- &es2.Doc{
-				ID: cast.ToString(key),
-				Op: es2.OperationDelete,
-			}
-			return true
-		})
-
-		close(compareDocCh)
 	})
 
-	return compareDocCh, errsCh
+	wg.Add(1)
+	utils.GoRecovery(m.ctx, func() {
+		defer wg.Done()
+		targetDocHashMap.Range(func(key any, value interface{}) bool {
+			diffResult.addDeleteDoc(cast.ToString(key))
+			return true
+		})
+	})
+
+	wg.Wait()
+
+	errs := <-errsCh
+	return &diffResult, errors.WithStack(errs.Ret())
 }
 
 type DiffResult struct {
-	SameCount   uint64
-	CreateCount uint64
-	UpdateCount uint64
-	DeleteCount uint64
+	SameCount   atomic.Uint64
+	CreateCount atomic.Uint64
+	UpdateCount atomic.Uint64
+	DeleteCount atomic.Uint64
 
 	CreateDocs []string
+
 	UpdateDocs []string
+	updateLock sync.Mutex
+
 	DeleteDocs []string
 }
 
+func (diffResult *DiffResult) toStr() string {
+	return fmt.Sprintf("same: %d, create: %d, update: %d, delete: %d, total: %d, percent: %0.4f",
+		diffResult.SameCount.Load(), diffResult.CreateCount.Load(), diffResult.UpdateCount.Load(),
+		diffResult.DeleteCount.Load(), diffResult.Total(), diffResult.Percent())
+}
+func (diffResult *DiffResult) addUpdateDoc(docId string) {
+	diffResult.UpdateCount.Add(1)
+	diffResult.updateLock.Lock()
+	defer diffResult.updateLock.Unlock()
+	diffResult.UpdateDocs = append(diffResult.UpdateDocs, docId)
+}
+
+func (diffResult *DiffResult) addCreateDoc(docId string) {
+	diffResult.CreateCount.Add(1)
+	diffResult.CreateDocs = append(diffResult.CreateDocs, docId)
+}
+
+func (diffResult *DiffResult) addDeleteDoc(docId string) {
+	diffResult.DeleteCount.Add(1)
+	diffResult.DeleteDocs = append(diffResult.DeleteDocs, docId)
+}
+
 func (diffResult *DiffResult) HasDiff() bool {
-	return diffResult.CreateCount > 0 || diffResult.UpdateCount > 0 || diffResult.DeleteCount > 0
+	return diffResult.CreateCount.Load() > 0 || diffResult.UpdateCount.Load() > 0 || diffResult.DeleteCount.Load() > 0
 }
 
 func (diffResult *DiffResult) Total() uint64 {
-	return diffResult.SameCount + diffResult.CreateCount + diffResult.UpdateCount + diffResult.DeleteCount
+	return diffResult.SameCount.Load() + diffResult.CreateCount.Load() + diffResult.UpdateCount.Load() + diffResult.DeleteCount.Load()
 }
 
 func (diffResult *DiffResult) Percent() float64 {
-	return float64(diffResult.Total()-diffResult.SameCount) / float64(diffResult.Total())
+	return float64(diffResult.Total()-diffResult.SameCount.Load()) / float64(diffResult.Total())
 }
 
 func (m *Migrator) Compare() (*DiffResult, error) {
@@ -671,30 +666,8 @@ func (m *Migrator) Compare() (*DiffResult, error) {
 		return nil, errors.WithStack(m.err)
 	}
 
-	docCh, errsCh := m.compare()
-	var diffResult DiffResult
-	for {
-		doc, ok := <-docCh
-		if !ok {
-			break
-		}
-		switch doc.Op {
-		case es2.OperationSame:
-			diffResult.SameCount += 1
-		case es2.OperationCreate:
-			diffResult.CreateCount += 1
-			diffResult.CreateDocs = append(diffResult.CreateDocs, doc.ID)
-		case es2.OperationUpdate:
-			diffResult.UpdateCount += 1
-			diffResult.UpdateDocs = append(diffResult.UpdateDocs, doc.ID)
-		case es2.OperationDelete:
-			diffResult.DeleteCount += 1
-			diffResult.DeleteDocs = append(diffResult.DeleteDocs, doc.ID)
-		}
-	}
-
-	errs := <-errsCh
-	return &diffResult, errs.Ret()
+	diffResult, err := m.compare()
+	return diffResult, errors.WithStack(err)
 }
 
 func (m *Migrator) Sync(force bool) error {
@@ -725,7 +698,7 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
 			wg.Done()
 			if scrollResult != nil {
 				if err := es.ClearScroll(scrollResult.ScrollId); err != nil {
-					utils.GetLogger(m.GetCtx()).WithError(err).Error("clear scroll")
+					utils.GetLogger(m.GetCtx()).Errorf("clear scroll %+v", err)
 				}
 			}
 		}()
