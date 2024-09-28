@@ -19,7 +19,6 @@ const (
 	OperationCreate Operation = iota
 	OperationUpdate
 	OperationDelete
-	OperationSame
 )
 
 type ScrollResult struct {

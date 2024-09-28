@@ -811,7 +811,7 @@ func (m *Migrator) singleBulkWorker(docCh <-chan *es2.Doc, index string, total u
 		if !ok {
 			break
 		}
-
+		v.Op = operation
 		count.Add(1)
 		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
