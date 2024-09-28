@@ -70,8 +70,9 @@ func (es *V6) NewScroll(ctx context.Context, index string, option *ScrollOption)
 
 	if option.SliceId != nil {
 		query["slice"] = map[string]interface{}{
-			"id":  *option.SliceId,
-			"max": *option.SliceSize,
+			"field": "_id",
+			"id":    *option.SliceId,
+			"max":   *option.SliceSize,
 		}
 	}
 
@@ -177,6 +178,15 @@ func (es *V6) GetIndexAliases(index string) (map[string]interface{}, error) {
 
 func (es *V6) GetIndexMappingAndSetting(index string) (IESSettings, error) {
 	// Get settings
+	// Get settings
+	exists, err := es.IndexExisted(index)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if !exists {
+		return nil, nil
+	}
+
 	setting, err := es.GetIndexSettings(index)
 	if err != nil {
 		return nil, errors.WithStack(err)

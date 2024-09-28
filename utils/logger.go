@@ -38,8 +38,8 @@ func GetLogger(ctx context.Context) *log.Entry {
 	ctxKeyMap := map[CtxKey]func(ctx context.Context) string{
 		CtxKeySourceESVersion: GetCtxKeySourceESVersion,
 		CtxKeyTargetESVersion: GetCtxKeyTargetESVersion,
-		CtxKeySourceIndex:     GetCtxKeySourceIndex,
-		CtxKeyTargetIndex:     GetCtxKeyTargetIndex,
+		CtxKeySourceObject:    GetCtxKeySourceObject,
+		CtxKeyTargetObject:    GetCtxKeyTargetObject,
 		CtxKeyTaskName:        GetCtxKeyTaskName,
 		CtxKeyTaskID:          GetCtxKeyTaskID,
 		CtxKeyTaskAction:      GetCtxKeyTaskAction,

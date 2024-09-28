@@ -8,6 +8,7 @@ import (
 	"github.com/CharellKing/ela-lib/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"strings"
 )
 
@@ -19,8 +20,15 @@ type Task struct {
 
 func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targetES es.ES) *Task {
 	taskId := uuid.New().String()
-	ctx = utils.SetCtxKeySourceESVersion(ctx, sourceES.GetClusterVersion())
-	ctx = utils.SetCtxKeyTargetESVersion(ctx, targetES.GetClusterVersion())
+
+	if lo.IsNotEmpty(sourceES) {
+		ctx = utils.SetCtxKeySourceESVersion(ctx, sourceES.GetClusterVersion())
+	}
+
+	if lo.IsNotEmpty(targetES) {
+		ctx = utils.SetCtxKeyTargetESVersion(ctx, targetES.GetClusterVersion())
+	}
+
 	ctx = utils.SetCtxKeyTaskName(ctx, taskCfg.Name)
 	ctx = utils.SetCtxKeyTaskID(ctx, taskId)
 	ctx = utils.SetCtxKeyTaskAction(ctx, string(taskCfg.TaskAction))
@@ -32,9 +40,11 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithScrollTime(taskCfg.ScrollTime).
 		WithSliceSize(taskCfg.SliceSize).
 		WithBufferCount(taskCfg.BufferCount).
-		WithActionParallelism(taskCfg.WriteParallelism).
-		WithActionSize(taskCfg.WriteSize).
-		WithIds(taskCfg.Ids)
+		WithActionParallelism(taskCfg.ActionParallelism).
+		WithActionSize(taskCfg.ActionSize).
+		WithIds(taskCfg.Ids).
+		WithIndexFilePairs(taskCfg.IndexFilePairs...).
+		WithIndexFileRoot(taskCfg.IndexFileRoot)
 	if taskCfg.IndexPattern != nil {
 		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
 	}
@@ -86,7 +96,7 @@ func (t *Task) CopyIndexSettings() error {
 }
 
 func (t *Task) Import() error {
-	return t.bulkMigrator.Import()
+	return t.bulkMigrator.Import(t.force)
 }
 
 func (t *Task) Export() error {
