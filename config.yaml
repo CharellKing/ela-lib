@@ -1,5 +1,4 @@
 level: info
-show_progress: true
 ignore_system_index: true
 elastics:
   es5:
@@ -27,16 +26,101 @@ elastics:
     password: ""
 
 tasks:
-  - name: task1
+#  - name: sync_task
+#    source_es: es5
+#    target_es: es8
+#    index_pattern: ".*"
+#    action: compare
+#    force: true
+#
+#  - name: compare_task
+#    source_es: es5
+#    target_es: es8
+#    index_pattern: ".*"
+#    action: compare
+
+#  - name: export_task
+#    source_es: es5
+#    action: export
+#    index_file_root: "C:/Users/andy/Documents"
+#    index_file_pairs:
+#      -
+#        index: "sample_hello"
+#        index_file_dir: "C:/Users/andy/Documents/abc"
+#
+#    action_parallelism: 2
+#
+#  - name: import_task
+#    target_es: es8
+#    action: import
+#    index_file_pairs:
+#      -
+#        index: "sample_hello3"
+#        index_file_dir: "C:/Users/andy/Documents/abc"
+#    force: true
+#    action_parallelism: 1
+#    slice_size: 1
+
+#  - name: compare_task
+#    source_es: es5
+#    target_es: es8
+#    action: compare
+#    index_pairs:
+#      -
+#        source_index: "sample_hello"
+#        target_index: "sample_hello3"
+#
+#    action_parallelism: 2
+#    slice_size: 1
+
+#  - name: sync
+#    source_es: es5
+#    target_es: es8
+#    action: sync
+#    index_pairs:
+#      -
+#        source_index: "sample_index"
+#        target_index: "sample_hello31"
+#
+#    action_parallelism: 2
+#    slice_size: 2
+
+  - name: sync-diff
     source_es: es5
     target_es: es8
-    #    index_pairs:
-    #      -
-    #        source_index: "sample_hello"
-    #        target_index: "sample_hello"
-    index_pattern: ".*"
-    action: compare
-    force: true
+    action: sync_diff
+    index_pairs:
+      -
+        source_index: "sample_index"
+        target_index: "sample_hello31"
+
+    action_parallelism: 2
+    slice_size: 2
+
+#  - name: compare
+#    source_es: es5
+#    target_es: es8
+#    action: compare
+#    index_pairs:
+#      -
+#        source_index: "sample_index"
+#        target_index: "sample_hello31"
+#
+#    action_parallelism: 2
+#    slice_size: 2
+
+#  - name: compare
+#    source_es: es5
+#    target_es: es8
+#    action: compare
+#    index_pairs:
+#      -
+#        source_index: "sample_index"
+#        target_index: "sample_hello31"
+#
+#    action_parallelism: 2
+#    slice_size: 2
+
 #  - name: task2
 #    source_es: es5
 #    target_es: es8

@@ -8,6 +8,7 @@ import (
 	"github.com/CharellKing/ela-lib/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"strings"
 )
 
@@ -19,8 +20,15 @@ type Task struct {
 
 func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targetES es.ES) *Task {
 	taskId := uuid.New().String()
-	ctx = utils.SetCtxKeySourceESVersion(ctx, sourceES.GetClusterVersion())
-	ctx = utils.SetCtxKeyTargetESVersion(ctx, targetES.GetClusterVersion())
+
+	if lo.IsNotEmpty(sourceES) {
+		ctx = utils.SetCtxKeySourceESVersion(ctx, sourceES.GetClusterVersion())
+	}
+
+	if lo.IsNotEmpty(targetES) {
+		ctx = utils.SetCtxKeyTargetESVersion(ctx, targetES.GetClusterVersion())
+	}
+
 	ctx = utils.SetCtxKeyTaskName(ctx, taskCfg.Name)
 	ctx = utils.SetCtxKeyTaskID(ctx, taskId)
 	ctx = utils.SetCtxKeyTaskAction(ctx, string(taskCfg.TaskAction))
@@ -32,10 +40,11 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithScrollTime(taskCfg.ScrollTime).
 		WithSliceSize(taskCfg.SliceSize).
 		WithBufferCount(taskCfg.BufferCount).
-		WithWriteParallel(taskCfg.WriteParallelism).
-		WithWriteSize(taskCfg.WriteSize).
+		WithActionParallelism(taskCfg.ActionParallelism).
+		WithActionSize(taskCfg.ActionSize).
 		WithIds(taskCfg.Ids).
-		WithCompareParallelism(taskCfg.CompareParallelism)
+		WithIndexFilePairs(taskCfg.IndexFilePairs...).
+		WithIndexFileRoot(taskCfg.IndexFileRoot)
 	if taskCfg.IndexPattern != nil {
 		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
 	}
@@ -86,6 +95,14 @@ func (t *Task) CopyIndexSettings() error {
 	return t.bulkMigrator.CopyIndexSettings(t.force)
 }
 
+func (t *Task) Import() error {
+	return t.bulkMigrator.Import(t.force)
+}
+
+func (t *Task) Export() error {
+	return t.bulkMigrator.Export()
+}
+
 func (t *Task) Run() error {
 	ctx := t.GetCtx()
 	taskAction := config.TaskAction(utils.GetCtxKeyTaskAction(ctx))
@@ -134,6 +151,10 @@ func (t *Task) Run() error {
 				WithField("deleteDocs", diffResult.DeleteDocs).
 				Info("difference")
 		}
+	case config.TaskActionImport:
+		return t.Import()
+	case config.TaskActionExport:
+		return t.Export()
 	default:
 		taskName := utils.GetCtxKeyTaskName(ctx)
 		return fmt.Errorf("%s invalid task action %s", taskName, taskAction)

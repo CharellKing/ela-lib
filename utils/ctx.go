@@ -8,10 +8,10 @@ import (
 type CtxKey string
 
 const (
-	CtxKeySourceESVersion CtxKey = "sourceEsSource"
-	CtxKeyTargetESVersion CtxKey = "targetEsTarget"
-	CtxKeySourceIndex     CtxKey = "sourceIndex"
-	CtxKeyTargetIndex     CtxKey = "targetIndex"
+	CtxKeySourceESVersion CtxKey = "sourceEsVersion"
+	CtxKeyTargetESVersion CtxKey = "targetEsVersion"
+	CtxKeySourceObject    CtxKey = "sourceObject"
+	CtxKeyTargetObject    CtxKey = "targetObject"
 	CtxKeyTaskName        CtxKey = "taskName"
 	CtxKeyTaskID          CtxKey = "taskId"
 	CtxKeyTaskAction      CtxKey = "taskAction"
@@ -24,7 +24,6 @@ const (
 
 	CtxKeyDateTimeFormatFixFields CtxKey = "dateTimeFormatFixFields"
 
-	CtxKeyShowProgress      CtxKey = "showProgress"
 	CtxKeyIgnoreSystemIndex CtxKey = "ignoreSystemIndex"
 )
 
@@ -44,20 +43,20 @@ func SetCtxKeyTargetESVersion(ctx context.Context, version string) context.Conte
 	return context.WithValue(ctx, CtxKeyTargetESVersion, version)
 }
 
-func GetCtxKeySourceIndex(ctx context.Context) string {
-	return cast.ToString(ctx.Value(CtxKeySourceIndex))
+func GetCtxKeySourceObject(ctx context.Context) string {
+	return cast.ToString(ctx.Value(CtxKeySourceObject))
 }
 
-func GetCtxKeyTargetIndex(ctx context.Context) string {
-	return cast.ToString(ctx.Value(CtxKeyTargetIndex))
+func GetCtxKeyTargetObject(ctx context.Context) string {
+	return cast.ToString(ctx.Value(CtxKeyTargetObject))
 }
 
-func SetCtxKeySourceIndex(ctx context.Context, index string) context.Context {
-	return context.WithValue(ctx, CtxKeySourceIndex, index)
+func SetCtxKeySourceObject(ctx context.Context, obj string) context.Context {
+	return context.WithValue(ctx, CtxKeySourceObject, obj)
 }
 
-func SetCtxKeyTargetIndex(ctx context.Context, index string) context.Context {
-	return context.WithValue(ctx, CtxKeyTargetIndex, index)
+func SetCtxKeyTargetObject(ctx context.Context, index string) context.Context {
+	return context.WithValue(ctx, CtxKeyTargetObject, index)
 }
 
 func GetCtxKeyTaskName(ctx context.Context) string {
@@ -122,14 +121,6 @@ func GetCtxKeyDateTimeFormatFixFields(ctx context.Context) map[string]string {
 
 func SetCtxKeyDateTimeFormatFixFields(ctx context.Context, fields map[string]string) context.Context {
 	return context.WithValue(ctx, CtxKeyDateTimeFormatFixFields, fields)
-}
-
-func GetCtxKeyShowProgress(ctx context.Context) bool {
-	return cast.ToBool(ctx.Value(CtxKeyShowProgress))
-}
-
-func SetCtxKeyShowProgress(ctx context.Context, showProgress bool) context.Context {
-	return context.WithValue(ctx, CtxKeyShowProgress, showProgress)
 }
 
 func GetCtxKeyIgnoreSystemIndex(ctx context.Context) bool {

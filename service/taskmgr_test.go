@@ -37,5 +37,4 @@ func TestRun(t *testing.T) {
 		utils.GetLogger(ctx).Errorf("run task manager %+v", err)
 		return
 	}
-
 }

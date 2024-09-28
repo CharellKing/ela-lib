@@ -209,6 +209,9 @@ func (v5 *V5Settings) GetProperties() map[string]interface{} {
 }
 
 func (v5 *V5Settings) GetFieldMap() map[string]interface{} {
+	if v5 == nil {
+		return nil
+	}
 	properties := v5.GetProperties()
 	return cast.ToStringMap(properties["properties"])
 }

@@ -19,7 +19,6 @@ const (
 	OperationCreate Operation = iota
 	OperationUpdate
 	OperationDelete
-	OperationSame
 )
 
 type ScrollResult struct {
@@ -29,11 +28,20 @@ type ScrollResult struct {
 }
 
 type Doc struct {
-	Type   string                 `mapstructure:"_type"`
-	ID     string                 `mapstructure:"_id"`
-	Source map[string]interface{} `mapstructure:"_source"`
-	Hash   uint64                 `mapstructure:"_hash"`
-	Op     Operation              `mapstructure:"_op"`
+	Type   string                 `mapstructure:"_type" json:"_type"`
+	ID     string                 `mapstructure:"_id" json:"_id"`
+	Source map[string]interface{} `mapstructure:"_source" json:"_source"`
+	Hash   uint64                 `mapstructure:"_hash" json:"_hash"`
+	Op     Operation              `mapstructure:"_op" json:"_op"`
+}
+
+func (d *Doc) DumpFileBytes() []byte {
+	buf, _ := json.Marshal(map[string]interface{}{
+		"_type":   d.Type,
+		"_id":     d.ID,
+		"_source": d.Source,
+	})
+	return buf
 }
 
 type ScrollOption struct {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,9 +11,11 @@ import (
 	"github.com/CharellKing/ela-lib/utils"
 	"github.com/bytedance/gopkg/collection/skipmap"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
 	"hash/fnv"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,9 +31,8 @@ const defaultScrollSize = 2000
 const defaultScrollTime = 10
 const defaultSliceSize = 10
 const defaultBufferCount = 10000
-const defaultWriteParallel = 20
-const defaultWriteSize = 10 // MB
-const defaultCompareParallel = 20
+const defaultActionSize = 10 // MB
+const defaultActionParallelism = 20
 
 type Migrator struct {
 	err error
@@ -40,7 +42,7 @@ type Migrator struct {
 	SourceES es2.ES
 	TargetES es2.ES
 
-	IndexPair config.IndexPair
+	IndexPair *config.IndexPair
 
 	ScrollSize uint
 
@@ -50,11 +52,13 @@ type Migrator struct {
 
 	BufferCount uint
 
-	CompareParallel uint
+	ActionSize uint
 
-	WriteParallel uint
+	ActionParallelism uint
 
-	WriteSize uint
+	IndexFilePair *config.IndexFilePair
+
+	FileDir string
 
 	Ids []string
 }
@@ -74,21 +78,25 @@ func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstC
 }
 
 func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
-	ctx = utils.SetCtxKeySourceESVersion(ctx, srcES.GetClusterVersion())
-	ctx = utils.SetCtxKeyTargetESVersion(ctx, dstES.GetClusterVersion())
+	if lo.IsNotEmpty(srcES) {
+		ctx = utils.SetCtxKeySourceESVersion(ctx, srcES.GetClusterVersion())
+	}
+
+	if lo.IsNotEmpty(dstES) {
+		ctx = utils.SetCtxKeyTargetESVersion(ctx, dstES.GetClusterVersion())
+	}
 
 	return &Migrator{
-		err:             nil,
-		ctx:             ctx,
-		SourceES:        srcES,
-		TargetES:        dstES,
-		ScrollSize:      defaultScrollSize,
-		ScrollTime:      defaultScrollTime,
-		SliceSize:       defaultSliceSize,
-		BufferCount:     defaultBufferCount,
-		WriteParallel:   defaultWriteParallel,
-		WriteSize:       defaultWriteSize,
-		CompareParallel: defaultCompareParallel,
+		err:               nil,
+		ctx:               ctx,
+		SourceES:          srcES,
+		TargetES:          dstES,
+		ScrollSize:        defaultScrollSize,
+		ScrollTime:        defaultScrollTime,
+		SliceSize:         defaultSliceSize,
+		BufferCount:       defaultBufferCount,
+		ActionParallelism: defaultActionParallelism,
+		ActionSize:        defaultActionSize,
 	}
 }
 
@@ -97,7 +105,7 @@ func (m *Migrator) GetCtx() context.Context {
 }
 
 func (m *Migrator) addDateTimeFixFields(ctx context.Context, fieldMap map[string]interface{}) context.Context {
-	if !strings.HasPrefix(m.SourceES.GetClusterVersion(), "5.") {
+	if !strings.HasPrefix(utils.GetCtxKeySourceESVersion(ctx), "5.") {
 		return ctx
 	}
 
@@ -115,47 +123,52 @@ func (m *Migrator) addDateTimeFixFields(ctx context.Context, fieldMap map[string
 	return utils.SetCtxKeyDateTimeFormatFixFields(ctx, dateTimeFixFields)
 }
 
-func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
-	if m.err != nil {
-		return m
-	}
-
-	ctx := utils.SetCtxKeySourceIndex(m.ctx, indexPair.SourceIndex)
-	ctx = utils.SetCtxKeyTargetIndex(ctx, indexPair.TargetIndex)
+func (m *Migrator) buildIndexPairContext() (context.Context, error) {
+	ctx := utils.SetCtxKeySourceObject(m.ctx, m.IndexPair.SourceIndex)
+	ctx = utils.SetCtxKeyTargetObject(ctx, m.IndexPair.TargetIndex)
 
 	var err error
-	sourceSetting, err := m.SourceES.GetIndexMappingAndSetting(indexPair.SourceIndex)
+	sourceSetting, err := m.SourceES.GetIndexMappingAndSetting(m.IndexPair.SourceIndex)
 	if err != nil {
-		m.err = errors.WithStack(err)
-		return m
+		return ctx, errors.WithStack(err)
 	}
 
-	targetSetting, err := m.SourceES.GetIndexMappingAndSetting(indexPair.TargetIndex)
+	targetSetting, err := m.TargetES.GetIndexMappingAndSetting(m.IndexPair.TargetIndex)
 	if err != nil {
-		m.err = errors.WithStack(err)
-		return m
+		return ctx, errors.WithStack(err)
 	}
 
 	ctx = utils.SetCtxKeySourceIndexSetting(ctx, sourceSetting)
 	ctx = utils.SetCtxKeyTargetIndexSetting(ctx, targetSetting)
 	ctx = utils.SetCtxKeySourceFieldMap(ctx, sourceSetting.GetFieldMap())
-	ctx = utils.SetCtxKeyTargetFieldMap(ctx, targetSetting.GetFieldMap())
 	ctx = m.addDateTimeFixFields(ctx, sourceSetting.GetFieldMap())
 
+	if targetSetting != nil {
+		ctx = utils.SetCtxKeyTargetFieldMap(ctx, targetSetting.GetFieldMap())
+	}
+
+	return ctx, nil
+}
+
+func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
+	if m.err != nil {
+		return m
+	}
+
 	return &Migrator{
-		err:             err,
-		ctx:             ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       indexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		err:               m.err,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         &indexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -169,18 +182,18 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      scrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        scrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -194,18 +207,18 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      scrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        scrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -218,18 +231,18 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		sliceSize = defaultSliceSize
 	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       sliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         sliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -242,67 +255,67 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		sliceSize = defaultBufferCount
 	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     sliceSize,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       sliceSize,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
-func (m *Migrator) WithWriteParallel(writeParallel uint) *Migrator {
+func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 	if m.err != nil {
 		return m
 	}
 
-	if writeParallel <= 0 {
-		writeParallel = defaultWriteParallel
+	if actionParallelism <= 0 {
+		actionParallelism = defaultActionParallelism
 	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   writeParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: actionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
-func (m *Migrator) WithWriteSize(writeSize uint) *Migrator {
+func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 	if m.err != nil {
 		return m
 	}
 
-	if writeSize <= 0 {
-		writeSize = defaultWriteSize
+	if actionSize <= 0 {
+		actionSize = defaultActionSize
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       writeSize,
-		Ids:             m.Ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        actionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
@@ -312,42 +325,39 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 	}
 
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             ids,
-		CompareParallel: m.CompareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               ids,
+		IndexFilePair:     m.IndexFilePair,
 	}
 }
 
-func (m *Migrator) WithCompareParallel(compareParallel uint) *Migrator {
+func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migrator {
 	if m.err != nil {
 		return m
 	}
 
-	if compareParallel <= 0 {
-		compareParallel = defaultCompareParallel
-	}
 	return &Migrator{
-		ctx:             m.ctx,
-		SourceES:        m.SourceES,
-		TargetES:        m.TargetES,
-		IndexPair:       m.IndexPair,
-		ScrollSize:      m.ScrollSize,
-		ScrollTime:      m.ScrollTime,
-		SliceSize:       m.SliceSize,
-		BufferCount:     m.BufferCount,
-		WriteParallel:   m.WriteParallel,
-		WriteSize:       m.WriteSize,
-		Ids:             m.Ids,
-		CompareParallel: compareParallel,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     indexFilePair,
 	}
 }
 
@@ -356,24 +366,15 @@ func (m *Migrator) CopyIndexSettings(force bool) error {
 		return errors.WithStack(m.err)
 	}
 
-	existed, err := m.TargetES.IndexExisted(m.IndexPair.TargetIndex)
+	ctx, err := m.buildIndexPairContext()
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
-	if existed && !force {
-		return nil
-	}
-
-	if existed {
-		if err := m.TargetES.DeleteIndex(m.IndexPair.TargetIndex); err != nil {
-			return errors.WithStack(err)
-		}
-	}
-
-	if err := m.copyIndexSettings(); err != nil {
+	if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
 		return errors.WithStack(err)
 	}
+
 	return nil
 }
 
@@ -395,6 +396,11 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 		return nil, errors.WithStack(m.err)
 	}
 
+	ctx, err := m.buildIndexPairContext()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
 	var errs utils.Errs
 	diffResult, err := m.compare()
 	if err != nil {
@@ -402,22 +408,22 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 	}
 
 	if len(diffResult.CreateDocs) > 0 {
-		utils.GetLogger(m.ctx).Debugf("sync with create docs: %+v", len(diffResult.CreateDocs))
-		if err := m.syncUpsert(getQueryMap(diffResult.CreateDocs), es2.OperationCreate); err != nil {
+		utils.GetLogger(ctx).Debugf("sync with create docs: %+v", len(diffResult.CreateDocs))
+		if err := m.syncUpsert(ctx, getQueryMap(diffResult.CreateDocs), es2.OperationCreate); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
 
 	if len(diffResult.UpdateDocs) > 0 {
-		utils.GetLogger(m.ctx).Debugf("sync with update docs: %+v", len(diffResult.UpdateDocs))
-		if err := m.syncUpsert(getQueryMap(diffResult.UpdateDocs), es2.OperationUpdate); err != nil {
+		utils.GetLogger(ctx).Debugf("sync with update docs: %+v", len(diffResult.UpdateDocs))
+		if err := m.syncUpsert(ctx, getQueryMap(diffResult.UpdateDocs), es2.OperationUpdate); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
 
 	if len(diffResult.DeleteDocs) > 0 {
-		utils.GetLogger(m.ctx).Debugf("sync with delete docs: %+v", len(diffResult.DeleteDocs))
-		if err := m.syncUpsert(getQueryMap(diffResult.DeleteDocs), es2.OperationDelete); err != nil {
+		utils.GetLogger(ctx).Debugf("sync with delete docs: %+v", len(diffResult.DeleteDocs))
+		if err := m.syncUpsert(ctx, getQueryMap(diffResult.DeleteDocs), es2.OperationDelete); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
@@ -435,10 +441,10 @@ func (m *Migrator) getESIndexFields(es es2.ES) (map[string]interface{}, error) {
 	return cast.ToStringMap(propertiesMap["properties"]), nil
 }
 
-func (m *Migrator) getKeywordFields() ([]string, error) {
-	sourceEsFieldMap := utils.GetCtxKeySourceFieldMap(m.ctx)
+func (m *Migrator) getKeywordFields(ctx context.Context) ([]string, error) {
+	sourceEsFieldMap := utils.GetCtxKeySourceFieldMap(ctx)
 
-	targetEsFieldMap := utils.GetCtxKeyTargetFieldMap(m.ctx)
+	targetEsFieldMap := utils.GetCtxKeyTargetFieldMap(ctx)
 
 	var keywordFields []string
 	for fieldName, fieldAttrs := range sourceEsFieldMap {
@@ -484,7 +490,12 @@ func (m *Migrator) handleMultipleErrors(errCh chan error) chan utils.Errs {
 }
 
 func (m *Migrator) compare() (*DiffResult, error) {
-	keywordFields, err := m.getKeywordFields()
+	ctx, err := m.buildIndexPairContext()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	keywordFields, err := m.getKeywordFields(ctx)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -494,9 +505,9 @@ func (m *Migrator) compare() (*DiffResult, error) {
 
 	queryMap := getQueryMap(m.Ids)
 
-	sourceDocCh, sourceTotal := m.search(m.SourceES, m.IndexPair.SourceIndex, queryMap, keywordFields, errCh, true)
+	sourceDocCh, sourceTotal := m.search(ctx, m.SourceES, m.IndexPair.SourceIndex, queryMap, keywordFields, errCh, true)
 
-	targetDocCh, targetTotal := m.search(m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
+	targetDocCh, targetTotal := m.search(ctx, m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
 
 	var (
 		sourceCount atomic.Uint64
@@ -510,12 +521,10 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	lastPrintTime := time.Now()
 
 	var wg sync.WaitGroup
-	for i := uint(0); i < m.CompareParallel; i++ {
+	for i := uint(0); i < m.ActionParallelism; i++ {
 		wg.Add(1)
 		utils.GoRecovery(m.GetCtx(), func() {
 			defer wg.Done()
-			bar := utils.NewProgressBar(m.ctx, "All Task", "diff", cast.ToInt(sourceTotal+targetTotal))
-			defer bar.Finish()
 
 			for {
 				var (
@@ -534,13 +543,11 @@ func (m *Migrator) compare() (*DiffResult, error) {
 				}
 
 				if sourceResult != nil {
-					bar.Increment()
 					sourceCount.Add(1)
 					sourceDocHashMap.Store(sourceResult.ID, sourceResult.Hash)
 				}
 
 				if targetResult != nil {
-					bar.Increment()
 					targetCount.Add(1)
 					targetDocHashMap.Store(targetResult.ID, targetResult.Hash)
 				}
@@ -677,17 +684,22 @@ func (m *Migrator) Sync(force bool) error {
 		return errors.WithStack(m.err)
 	}
 
+	ctx, err := m.buildIndexPairContext()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
 	utils.GetLogger(m.ctx).Debugf("sync with force: %+v", force)
-	if err := m.CopyIndexSettings(force); err != nil {
+	if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
 		utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
 	}
-	if err := m.syncUpsert(getQueryMap(m.Ids), es2.OperationCreate); err != nil {
+	if err := m.syncUpsert(ctx, getQueryMap(m.Ids), es2.OperationCreate); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil
 }
 
-func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
+func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es es2.ES,
 	index string, query map[string]interface{}, sortFields []string,
 	sliceId *uint, sliceSize *uint, docCh chan *es2.Doc, errCh chan error, needHash bool) {
 
@@ -706,7 +718,7 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
 		}()
 
 		func() {
-			scrollResult, err = es.NewScroll(m.ctx, index, &es2.ScrollOption{
+			scrollResult, err = es.NewScroll(ctx, index, &es2.ScrollOption{
 				Query:      query,
 				SortFields: sortFields,
 				ScrollSize: m.ScrollSize,
@@ -730,12 +742,19 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
 			if scrollResult == nil {
 				break
 			}
-			if needHash {
-				lop.Map(scrollResult.Docs, func(doc *es2.Doc, _ int) *es2.Doc {
+
+			scrollResult.Docs = lop.Map(scrollResult.Docs, func(doc *es2.Doc, _ int) *es2.Doc {
+				var fixErr error
+				doc, fixErr = es2.FixDoc(ctx, doc)
+				if fixErr != nil {
+					errCh <- fixErr
+				}
+				if needHash {
 					doc.Hash = m.getDocHash(doc)
-					return doc
-				})
-			}
+				}
+				return doc
+			})
+
 			for _, doc := range scrollResult.Docs {
 				docCh <- doc
 			}
@@ -743,7 +762,7 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
 			if len(scrollResult.Docs) < cast.ToInt(m.ScrollSize) {
 				break
 			}
-			if scrollResult, err = es.NextScroll(m.GetCtx(), scrollResult.ScrollId, m.ScrollTime); err != nil {
+			if scrollResult, err = es.NextScroll(ctx, scrollResult.ScrollId, m.ScrollTime); err != nil {
 				utils.GetLogger(m.GetCtx()).Errorf("searchSingleSlice error: %+v", err)
 				errCh <- errors.WithStack(err)
 			}
@@ -751,7 +770,7 @@ func (m *Migrator) searchSingleSlice(wg *sync.WaitGroup, es es2.ES,
 	})
 }
 
-func (m *Migrator) search(es es2.ES, index string, query map[string]interface{},
+func (m *Migrator) search(ctx context.Context, es es2.ES, index string, query map[string]interface{},
 	sortFields []string, errCh chan error, needHash bool) (chan *es2.Doc, uint64) {
 	docCh := make(chan *es2.Doc, m.BufferCount)
 	var wg sync.WaitGroup
@@ -766,12 +785,12 @@ func (m *Migrator) search(es es2.ES, index string, query map[string]interface{},
 
 	if m.SliceSize <= 1 {
 		wg.Add(1)
-		m.searchSingleSlice(&wg, es, index, query, sortFields, nil, nil, docCh, errCh, needHash)
+		m.searchSingleSlice(ctx, &wg, es, index, query, sortFields, nil, nil, docCh, errCh, needHash)
 	} else {
 		for i := uint(0); i < m.SliceSize; i++ {
 			idx := i
 			wg.Add(1)
-			m.searchSingleSlice(&wg, es, index, query, sortFields, &idx, &m.SliceSize, docCh, errCh, needHash)
+			m.searchSingleSlice(ctx, &wg, es, index, query, sortFields, &idx, &m.SliceSize, docCh, errCh, needHash)
 		}
 	}
 	utils.GoRecovery(m.GetCtx(), func() {
@@ -782,47 +801,46 @@ func (m *Migrator) search(es es2.ES, index string, query map[string]interface{},
 	return docCh, total
 }
 
-func (m *Migrator) singleBulkWorker(bar *utils.ProgressBar, doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
+func (m *Migrator) singleBulkWorker(docCh <-chan *es2.Doc, index string, total uint64, count *atomic.Uint64,
 	operation es2.Operation, errCh chan error) {
 	var buf bytes.Buffer
 
 	lastPrintTime := time.Now()
 	for {
-		v, ok := <-doc
+		v, ok := <-docCh
 		if !ok {
 			break
 		}
-		bar.Increment()
+		v.Op = operation
 		count.Add(1)
 		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
 			utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
-				percent, count.Load(), total, len(doc))
+				percent, count.Load(), total, len(docCh))
 			lastPrintTime = time.Now()
 		}
 		switch operation {
 		case es2.OperationCreate:
-			if err := m.TargetES.BulkBody(m.IndexPair.TargetIndex, &buf, v); err != nil {
+			if err := m.TargetES.BulkBody(index, &buf, v); err != nil {
 				errCh <- errors.WithStack(err)
 			}
 		case es2.OperationUpdate:
-			if err := m.TargetES.BulkBody(m.IndexPair.TargetIndex, &buf, v); err != nil {
+			if err := m.TargetES.BulkBody(index, &buf, v); err != nil {
 				errCh <- errors.WithStack(err)
 			}
 		case es2.OperationDelete:
-			if err := m.TargetES.BulkBody(m.IndexPair.TargetIndex, &buf, v); err != nil {
+			if err := m.TargetES.BulkBody(index, &buf, v); err != nil {
 				errCh <- errors.WithStack(err)
 			}
 		default:
 			utils.GetLogger(m.ctx).Error("unknown operation")
 		}
 
-		if buf.Len() >= cast.ToInt(m.WriteSize)*1024*1024 {
+		if buf.Len() >= cast.ToInt(m.ActionSize)*1024*1024 {
 			if err := m.TargetES.Bulk(&buf); err != nil {
 				errCh <- errors.WithStack(err)
 			}
-
 			buf.Reset()
 		}
 	}
@@ -847,28 +865,90 @@ func (m *Migrator) getOperationTitle(operation es2.Operation) string {
 		return ""
 	}
 }
-func (m *Migrator) bulkWorker(doc <-chan *es2.Doc, total uint64, operation es2.Operation, errCh chan error) {
+func (m *Migrator) bulkWorker(docCh <-chan *es2.Doc, index string, total uint64, operation es2.Operation, errCh chan error) {
 	var wg sync.WaitGroup
 	var count atomic.Uint64
-	bar := utils.NewProgressBar(m.ctx, "All Tasks", fmt.Sprintf("bulk.%s", m.getOperationTitle(operation)),
-		cast.ToInt(total))
-	defer bar.Finish()
 
-	if m.WriteParallel <= 1 {
-		m.singleBulkWorker(bar, doc, total, &count, operation, errCh)
+	if m.ActionParallelism <= 1 {
+		m.singleBulkWorker(docCh, index, total, &count, operation, errCh)
 	}
 
-	wg.Add(cast.ToInt(m.WriteParallel))
-	for i := 0; i < cast.ToInt(m.WriteParallel); i++ {
+	wg.Add(cast.ToInt(m.ActionParallelism))
+	for i := 0; i < cast.ToInt(m.ActionParallelism); i++ {
 		utils.GoRecovery(m.ctx, func() {
 			defer wg.Done()
-			m.singleBulkWorker(bar, doc, total, &count, operation, errCh)
+			m.singleBulkWorker(docCh, index, total, &count, operation, errCh)
 		})
 	}
 	wg.Wait()
 }
 
-func (m *Migrator) syncUpsert(query map[string]interface{}, operation es2.Operation) error {
+func (m *Migrator) singleBulkFileWorker(doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
+	filepath string, errCh chan error) {
+	f, err := os.Create(filepath)
+	if err != nil {
+		errCh <- errors.WithStack(err)
+		return
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	var buf strings.Builder
+	writer := bufio.NewWriter(f)
+
+	lastPrintTime := time.Now()
+	for {
+		v, ok := <-doc
+		if !ok {
+			break
+		}
+		count.Add(1)
+		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
+
+		if time.Now().Sub(lastPrintTime) > everyLogTime {
+			utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
+				percent, count.Load(), total, len(doc))
+			lastPrintTime = time.Now()
+		}
+
+		buf.Write(v.DumpFileBytes())
+		buf.WriteString("\n")
+
+		if buf.Len() >= cast.ToInt(m.ActionSize)*1024*1024 {
+			if _, err := writer.WriteString(buf.String()); err != nil {
+				errCh <- errors.WithStack(err)
+			}
+			_ = writer.Flush()
+			buf.Reset()
+		}
+	}
+
+	if buf.Len() > 0 {
+		if _, err := f.WriteString(buf.String()); err != nil {
+			errCh <- errors.WithStack(err)
+		}
+		_ = writer.Flush()
+		buf.Reset()
+	}
+
+}
+
+func (m *Migrator) bulkFileWorker(doc <-chan *es2.Doc, total uint64, files []string, errCh chan error) {
+	var wg sync.WaitGroup
+	var count atomic.Uint64
+
+	wg.Add(len(files))
+	for _, file := range files {
+		utils.GoRecovery(m.ctx, func() {
+			defer wg.Done()
+			m.singleBulkFileWorker(doc, total, &count, file, errCh)
+		})
+	}
+	wg.Wait()
+}
+
+func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{}, operation es2.Operation) error {
 	errCh := make(chan error)
 	errsCh := m.handleMultipleErrors(errCh)
 
@@ -877,20 +957,35 @@ func (m *Migrator) syncUpsert(query map[string]interface{}, operation es2.Operat
 		total uint64
 	)
 	if operation == es2.OperationDelete {
-		docCh, total = m.search(m.TargetES, m.IndexPair.SourceIndex, query, nil, errCh, false)
+		docCh, total = m.search(ctx, m.TargetES, m.IndexPair.SourceIndex, query, nil, errCh, false)
 	} else {
-		docCh, total = m.search(m.SourceES, m.IndexPair.SourceIndex, query, nil, errCh, false)
+		docCh, total = m.search(ctx, m.SourceES, m.IndexPair.SourceIndex, query, nil, errCh, false)
 	}
-	m.bulkWorker(docCh, total, operation, errCh)
+	m.bulkWorker(docCh, m.IndexPair.TargetIndex, total, operation, errCh)
 	close(errCh)
 	errs := <-errsCh
 	return errs.Ret()
 }
 
-func (m *Migrator) copyIndexSettings() error {
-	sourceESSetting := utils.GetCtxKeySourceIndexSetting(m.ctx).(es2.IESSettings)
+func (m *Migrator) copyIndexSettings(ctx context.Context, index string, force bool) error {
+	existed, err := m.TargetES.IndexExisted(index)
+	if err != nil {
+		return errors.WithStack(err)
+	}
 
-	targetESSetting := m.GetTargetESSetting(sourceESSetting)
+	if existed && !force {
+		return nil
+	}
+
+	if existed {
+		if err := m.TargetES.DeleteIndex(index); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	sourceESSetting := utils.GetCtxKeySourceIndexSetting(ctx).(es2.IESSettings)
+
+	targetESSetting := m.GetTargetESSetting(sourceESSetting, index)
 
 	if err := m.TargetES.CreateIndex(targetESSetting); err != nil {
 		return errors.WithStack(err)
@@ -899,16 +994,344 @@ func (m *Migrator) copyIndexSettings() error {
 	return nil
 }
 
-func (m *Migrator) GetTargetESSetting(sourceESSetting es2.IESSettings) es2.IESSettings {
+func (m *Migrator) GetTargetESSetting(sourceESSetting es2.IESSettings, index string) es2.IESSettings {
 	if strings.HasPrefix(m.TargetES.GetClusterVersion(), "8.") {
-		return sourceESSetting.ToTargetV8Settings(m.IndexPair.TargetIndex)
+		return sourceESSetting.ToTargetV8Settings(index)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "7.") {
-		return sourceESSetting.ToTargetV7Settings(m.IndexPair.TargetIndex)
+		return sourceESSetting.ToTargetV7Settings(index)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "6.") {
-		return sourceESSetting.ToTargetV6Settings(m.IndexPair.TargetIndex)
+		return sourceESSetting.ToTargetV6Settings(index)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "5.") {
-		return sourceESSetting.ToTargetV5Settings(m.IndexPair.TargetIndex)
+		return sourceESSetting.ToTargetV5Settings(index)
 	}
 
 	return nil
+}
+
+func (m *Migrator) getTotalFromFile(filePath string) (uint64, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	defer func() {
+		_ = file.Close()
+	}()
+
+	scanner := bufio.NewScanner(file)
+	var firstLineText string
+	if scanner.Scan() {
+		firstLineText = scanner.Text()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	total, err := cast.ToUint64E(firstLineText)
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+	return total, nil
+}
+
+func (m *Migrator) convertLineToDoc(ctx context.Context, line []byte) (*es2.Doc, error) {
+	var (
+		doc es2.Doc
+		err error
+	)
+
+	line = bytes.TrimSpace(line)
+	if len(line) <= 0 {
+		return nil, nil
+	}
+
+	if err = json.Unmarshal(line, &doc); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	newDoc, err := es2.FixDoc(ctx, &doc)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return newDoc, nil
+
+}
+func (m *Migrator) getFileContentWithSlice(ctx context.Context, wg *sync.WaitGroup, indexFileSetting *IndexFileSetting, sliceId *uint, sliceSize *uint, docCh chan *es2.Doc, errCh chan error) {
+	utils.GoRecovery(m.GetCtx(), func() {
+		defer wg.Done()
+		for _, filePath := range indexFileSetting.Files {
+			func() {
+				file, err := os.OpenFile(filePath, os.O_RDONLY, 0644)
+				if err != nil {
+					errCh <- errors.WithStack(err)
+					return
+				}
+
+				defer func() {
+					_ = file.Close()
+				}()
+
+				var lineIdx int64 = 0
+
+				var interval int64 = 1
+				if sliceSize != nil && *sliceSize > 1 {
+					interval = int64(*sliceSize)
+				}
+
+				scanner := bufio.NewScanner(file)
+
+				var lines []string
+				for scanner.Scan() {
+					line := scanner.Text()
+					if lineIdx%interval == int64(*sliceId) {
+						lines = append(lines, line)
+					}
+
+					if cast.ToUint(len(lines)) >= m.ScrollSize {
+						for _, doc := range lop.Map(lines, func(line string, _ int) *es2.Doc {
+							doc, err := m.convertLineToDoc(ctx, []byte(line))
+							if err != nil {
+								errCh <- errors.WithStack(err)
+							}
+							doc, err = es2.FixDoc(ctx, doc)
+							if err != nil {
+								errCh <- errors.WithStack(err)
+							}
+							return doc
+						}) {
+							if doc != nil {
+								docCh <- doc
+							}
+						}
+					}
+
+					lineIdx++
+				}
+
+				if len(lines) > 0 {
+					for _, doc := range lop.Map(lines, func(line string, _ int) *es2.Doc {
+						doc, err := m.convertLineToDoc(ctx, []byte(line))
+						if err != nil {
+							errCh <- errors.WithStack(err)
+						}
+						doc, err = es2.FixDoc(ctx, doc)
+						if err != nil {
+							errCh <- errors.WithStack(err)
+						}
+						return doc
+					}) {
+						if doc != nil {
+							docCh <- doc
+						}
+					}
+				}
+			}()
+		}
+	})
+}
+
+func (m *Migrator) scrollFile(ctx context.Context, indexFileSetting *IndexFileSetting, errCh chan error) chan *es2.Doc {
+	docCh := make(chan *es2.Doc, m.BufferCount)
+	var wg sync.WaitGroup
+
+	if len(indexFileSetting.Files) > 0 {
+		for i := uint(0); i < m.SliceSize; i++ {
+			idx := i
+			wg.Add(1)
+			m.getFileContentWithSlice(ctx, &wg, indexFileSetting, &idx, &m.SliceSize, docCh, errCh)
+		}
+	}
+
+	utils.GoRecovery(ctx, func() {
+		wg.Wait()
+		close(docCh)
+	})
+
+	return docCh
+}
+
+func (m *Migrator) buildImportIndexFilePairContext() (context.Context, *IndexFileSetting, error) {
+	ctx := m.ctx
+	settingFile := fmt.Sprintf("%s/setting.json", m.IndexFilePair.IndexFileDir)
+	settingBytes, err := os.ReadFile(settingFile)
+	if err != nil {
+		return ctx, nil, errors.WithStack(err)
+	}
+	settingMap := make(map[string]interface{})
+	if err := json.Unmarshal(settingBytes, &settingMap); err != nil {
+		return ctx, nil, errors.WithStack(err)
+	}
+
+	indexFileSetting, err := LoadIndexFileSettingFromMap(settingMap)
+	if err != nil {
+		return ctx, nil, errors.WithStack(err)
+	}
+
+	ctx = utils.SetCtxKeySourceObject(m.ctx, m.IndexFilePair.IndexFileDir)
+	ctx = utils.SetCtxKeyTargetObject(ctx, m.IndexFilePair.Index)
+
+	ctx = utils.SetCtxKeySourceESVersion(ctx, indexFileSetting.ESVersion)
+	ctx = utils.SetCtxKeySourceIndexSetting(ctx, indexFileSetting.Settings)
+	ctx = utils.SetCtxKeySourceFieldMap(ctx, indexFileSetting.Settings.GetFieldMap())
+	ctx = m.addDateTimeFixFields(ctx, indexFileSetting.Settings.GetFieldMap())
+
+	//targetSetting, err := m.TargetES.GetIndexMappingAndSetting(m.IndexFilePair.Index)
+	//if err != nil {
+	//	return ctx, nil, errors.WithStack(err)
+	//}
+	//
+	//ctx = utils.SetCtxKeyTargetIndexSetting(ctx, targetSetting)
+	//ctx = utils.SetCtxKeyTargetFieldMap(ctx, targetSetting.GetFieldMap())
+	//
+	//ctx = m.addDateTimeFixFields(ctx, targetSetting.GetFieldMap())
+
+	return ctx, indexFileSetting, nil
+}
+
+func (m *Migrator) buildExportIndexFilePairContext() (context.Context, error) {
+	ctx := m.ctx
+	ctx = utils.SetCtxKeySourceObject(m.ctx, m.IndexFilePair.Index)
+	ctx = utils.SetCtxKeyTargetObject(ctx, m.IndexFilePair.IndexFileDir)
+
+	var err error
+	sourceSetting, err := m.SourceES.GetIndexMappingAndSetting(m.IndexFilePair.Index)
+	if err != nil {
+		return ctx, errors.WithStack(err)
+	}
+
+	ctx = utils.SetCtxKeySourceIndexSetting(ctx, sourceSetting)
+	ctx = utils.SetCtxKeySourceFieldMap(ctx, sourceSetting.GetFieldMap())
+
+	ctx = m.addDateTimeFixFields(ctx, sourceSetting.GetFieldMap())
+
+	return ctx, nil
+}
+
+func (m *Migrator) Import(force bool) error {
+	if m.err != nil {
+		return errors.WithStack(m.err)
+	}
+
+	ctx, indexFileSetting, err := m.buildImportIndexFilePairContext()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err := m.copyIndexSettings(ctx, m.IndexFilePair.Index, force); err != nil {
+		utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
+	}
+
+	errCh := make(chan error)
+	errsCh := m.handleMultipleErrors(errCh)
+
+	var (
+		docCh chan *es2.Doc
+	)
+
+	docCh = m.scrollFile(ctx, indexFileSetting, errCh)
+	m.bulkWorker(docCh, m.IndexFilePair.Index, indexFileSetting.Total, es2.OperationCreate, errCh)
+	close(errCh)
+	errs := <-errsCh
+	return errs.Ret()
+}
+
+type IndexFileSetting struct {
+	Total     uint64          `json:"total"`
+	Settings  es2.IESSettings `json:"settings"`
+	Files     []string        `json:"files"`
+	ESVersion string          `json:"es_version"`
+	Index     string          `json:"index"`
+}
+
+func LoadIndexFileSettingFromMap(settingMap map[string]interface{}) (*IndexFileSetting, error) {
+	setting := &IndexFileSetting{}
+	setting.Total = cast.ToUint64(settingMap["total"])
+	setting.ESVersion = cast.ToString(settingMap["es_version"])
+	setting.Index = cast.ToString(settingMap["index"])
+	setting.Files = cast.ToStringSlice(settingMap["files"])
+
+	var err error
+	setting.Settings, err = es2.GetESSettings(setting.ESVersion, cast.ToStringMap(settingMap["settings"]))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return setting, nil
+}
+
+func (m *Migrator) saveIndexFileSetting(ctx context.Context) (*IndexFileSetting, error) {
+	total, err := m.SourceES.Count(ctx, m.IndexFilePair.Index)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	settings := utils.GetCtxKeySourceIndexSetting(ctx).(es2.IESSettings)
+	indexFileSetting := &IndexFileSetting{
+		Total:     total,
+		Settings:  settings,
+		ESVersion: utils.GetCtxKeySourceESVersion(ctx),
+		Index:     m.IndexFilePair.Index,
+	}
+
+	var i uint = 0
+	for i < m.ActionParallelism {
+		filePath := fmt.Sprintf("%s/part-%d", m.IndexFilePair.IndexFileDir, i)
+		indexFileSetting.Files = append(indexFileSetting.Files, filePath)
+		i++
+	}
+
+	_, err = os.Stat(m.IndexFilePair.IndexFileDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, errors.WithStack(err)
+	}
+
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(m.IndexFilePair.IndexFileDir, 0755); err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+
+	indexFileSettingBytes, _ := json.Marshal(indexFileSetting)
+	settingFilePath := fmt.Sprintf("%s/setting.json", m.IndexFilePair.IndexFileDir)
+	err = os.WriteFile(settingFilePath, indexFileSettingBytes, 0644)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return indexFileSetting, nil
+}
+
+func (m *Migrator) export(ctx context.Context) error {
+	indexFileSetting, err := m.saveIndexFileSetting(ctx)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	errCh := make(chan error)
+	errsCh := m.handleMultipleErrors(errCh)
+
+	var (
+		docCh chan *es2.Doc
+		total uint64
+	)
+
+	query := getQueryMap(m.Ids)
+	docCh, total = m.search(ctx, m.SourceES, m.IndexFilePair.Index, query, nil, errCh, false)
+
+	m.bulkFileWorker(docCh, total, indexFileSetting.Files, errCh)
+	close(errCh)
+	errs := <-errsCh
+	return errs.Ret()
+}
+
+func (m *Migrator) Export() error {
+	if m.err != nil {
+		return errors.WithStack(m.err)
+	}
+
+	ctx, err := m.buildExportIndexFilePairContext()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return m.export(ctx)
 }

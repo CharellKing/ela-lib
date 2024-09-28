@@ -62,7 +62,7 @@ type ScrollResultV8 struct {
 	ScrollId string `json:"_scroll_id,omitempty"`
 	TimedOut bool   `json:"timed_out,omitempty"`
 	Hits     struct {
-		MaxScore float32 `json:"max_score,omitempty"`
+		MaxScore *float32 `json:"max_score,omitempty"`
 		Total    struct {
 			Value    int    `json:"value,omitempty"`
 			Relation string `json:"relation,omitempty"`
@@ -97,8 +97,9 @@ func (es *V8) NewScroll(ctx context.Context, index string, option *ScrollOption)
 
 	if option.SliceId != nil {
 		query["slice"] = map[string]interface{}{
-			"id":  *option.SliceId,
-			"max": *option.SliceSize,
+			"field": "_id",
+			"id":    *option.SliceId,
+			"max":   *option.SliceSize,
 		}
 	}
 
@@ -126,6 +127,7 @@ func (es *V8) NewScroll(ctx context.Context, index string, option *ScrollOption)
 	}
 
 	var scrollResult ScrollResultV8
+
 	if err := json.NewDecoder(res.Body).Decode(&scrollResult); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -194,6 +196,14 @@ func (es *V8) ClearScroll(scrollId string) error {
 
 func (es *V8) GetIndexMappingAndSetting(index string) (IESSettings, error) {
 	// Get settings
+	exists, err := es.IndexExisted(index)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if !exists {
+		return nil, nil
+	}
+
 	setting, err := es.GetIndexSettings(index)
 	if err != nil {
 		return nil, errors.WithStack(err)
