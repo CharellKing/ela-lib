@@ -1103,6 +1103,7 @@ func (m *Migrator) getFileContentWithSlice(ctx context.Context, wg *sync.WaitGro
 								docCh <- doc
 							}
 						}
+						lines = []string{}
 					}
 
 					lineIdx++
@@ -1124,6 +1125,7 @@ func (m *Migrator) getFileContentWithSlice(ctx context.Context, wg *sync.WaitGro
 							docCh <- doc
 						}
 					}
+					lines = []string{}
 				}
 			}()
 		}
