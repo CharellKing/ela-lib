@@ -9,6 +9,7 @@ const (
 	TaskActionCompare   TaskAction = "compare"
 	TaskActionImport    TaskAction = "import"
 	TaskActionExport    TaskAction = "export"
+	TaskActionTemplate  TaskAction = "create_template"
 )
 
 type TaskCfg struct {
@@ -17,6 +18,7 @@ type TaskCfg struct {
 	SourceES          string           `mapstructure:"source_es"`
 	TargetES          string           `mapstructure:"target_es"`
 	IndexPairs        []*IndexPair     `mapstructure:"index_pairs"`
+	IndexTemplates    []*IndexTemplate `mapstructure:"index_templates"`
 	TaskAction        TaskAction       `mapstructure:"action"`
 	Force             bool             `mapstructure:"force"`
 	ScrollSize        uint             `mapstructure:"scroll_size"`
@@ -39,6 +41,11 @@ type IndexPair struct {
 type IndexFilePair struct {
 	Index        string `mapstructure:"index"`
 	IndexFileDir string `mapstructure:"index_file_dir"`
+}
+
+type IndexTemplate struct {
+	Name     string   `mapstructure:"name"`
+	Patterns []string `mapstructure:"pattern"`
 }
 
 type ESConfig struct {

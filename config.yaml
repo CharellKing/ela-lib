@@ -85,14 +85,26 @@ tasks:
 #    action_parallelism: 2
 #    slice_size: 2
 
-  - name: sync-diff
+#  - name: sync-diff
+#    source_es: es5
+#    target_es: es8
+#    action: sync_diff
+#    index_pairs:
+#      -
+#        source_index: "sample_index"
+#        target_index: "sample_hello31"
+#
+#    action_parallelism: 2
+#    slice_size: 2
+
+  - name: create-template
     source_es: es5
     target_es: es8
-    action: sync_diff
-    index_pairs:
+    action: create_template
+    index_templates:
       -
-        source_index: "sample_index"
-        target_index: "sample_hello31"
+        name: "template_sample_hello"
+        pattern: ["sample_*", "index_*"]
 
     action_parallelism: 2
     slice_size: 2

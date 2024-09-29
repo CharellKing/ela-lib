@@ -70,6 +70,8 @@ type ES interface {
 	DeleteIndex(index string) error
 
 	Count(ctx context.Context, index string) (uint64, error)
+
+	CreateTemplate(ctx context.Context, esSetting IESSettings, pattern string, name string) error
 }
 
 type V0 struct {

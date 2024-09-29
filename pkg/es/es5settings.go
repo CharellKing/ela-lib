@@ -215,3 +215,10 @@ func (v5 *V5Settings) GetFieldMap() map[string]interface{} {
 	properties := v5.GetProperties()
 	return cast.ToStringMap(properties["properties"])
 }
+
+func (v5 *V5Settings) ToTemplateSettings(name string, patterns []string) map[string]interface{} {
+	return map[string]interface{}{
+		"index_patterns": patterns,
+		"alias":
+	}
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cast"
 	"hash/fnv"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,6 +58,8 @@ type Migrator struct {
 	ActionParallelism uint
 
 	IndexFilePair *config.IndexFilePair
+
+	IndexTemplate *config.IndexTemplate
 
 	FileDir string
 
@@ -169,6 +172,29 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
+	}
+}
+
+func (m *Migrator) WithIndexTemplate(indexTemplate config.IndexTemplate) *Migrator {
+	if m.err != nil {
+		return m
+	}
+	return &Migrator{
+		err:               m.err,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     &indexTemplate,
 	}
 }
 
@@ -194,6 +220,7 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -219,6 +246,7 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -243,6 +271,7 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -267,6 +296,7 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -291,6 +321,7 @@ func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -316,6 +347,7 @@ func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 		ActionSize:        actionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -337,6 +369,7 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -358,6 +391,7 @@ func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migra
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     indexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -372,6 +406,63 @@ func (m *Migrator) CopyIndexSettings(force bool) error {
 	}
 
 	if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (m *Migrator) createTemplate() error {
+	indexes, err := m.SourceES.GetIndexes()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	var newPatterns []string
+	for _, pattern := range m.IndexTemplate.Patterns {
+		newPatterns = append(newPatterns, fmt.Sprintf("^%s$", strings.ReplaceAll(pattern, "*", ".*")))
+	}
+
+	var matchedIndex string
+	for _, index := range indexes {
+		for _, pattern := range newPatterns {
+			ok, err := regexp.Match(pattern, []byte(index))
+			if err != nil {
+				return errors.WithStack(err)
+			}
+
+			if ok {
+				matchedIndex = index
+				break
+			}
+		}
+
+		if matchedIndex != "" {
+			break
+		}
+	}
+
+	if lo.IsEmpty(matchedIndex) {
+		return errors.New("no matched pattern index in source es")
+	}
+
+	sourceESSetting, err := m.SourceES.GetIndexMappingAndSetting(matchedIndex)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	targetESSetting := m.GetTargetESSetting(sourceESSetting, matchedIndex)
+	fmt.Println(targetESSetting)
+
+	return nil
+}
+
+func (m *Migrator) CreateTemplate() error {
+	if m.err != nil {
+		return errors.WithStack(m.err)
+	}
+
+	if err := m.createTemplate(); err != nil {
 		return errors.WithStack(err)
 	}
 

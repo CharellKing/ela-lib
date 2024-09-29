@@ -44,7 +44,8 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithActionSize(taskCfg.ActionSize).
 		WithIds(taskCfg.Ids).
 		WithIndexFilePairs(taskCfg.IndexFilePairs...).
-		WithIndexFileRoot(taskCfg.IndexFileRoot)
+		WithIndexFileRoot(taskCfg.IndexFileRoot).
+		WithIndexTemplates(taskCfg.IndexTemplates...)
 	if taskCfg.IndexPattern != nil {
 		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
 	}
@@ -103,6 +104,10 @@ func (t *Task) Export() error {
 	return t.bulkMigrator.Export()
 }
 
+func (t *Task) CreateTemplate() error {
+	return t.bulkMigrator.CreateTemplates()
+}
+
 func (t *Task) Run() error {
 	ctx := t.GetCtx()
 	taskAction := config.TaskAction(utils.GetCtxKeyTaskAction(ctx))
@@ -155,6 +160,8 @@ func (t *Task) Run() error {
 		return t.Import()
 	case config.TaskActionExport:
 		return t.Export()
+	case config.TaskActionTemplate:
+		return t.CreateTemplate()
 	default:
 		taskName := utils.GetCtxKeyTaskName(ctx)
 		return fmt.Errorf("%s invalid task action %s", taskName, taskAction)

@@ -494,3 +494,34 @@ func (es *V5) GetIndexes() ([]string, error) {
 
 	return indices, nil
 }
+
+func (es *V5) CreateTemplate(ctx context.Context, esSetting IESSettings, patterns []string, name string) error {
+	templateBodyMap := lo.Assign(
+		esSetting.GetAliases(),
+		esSetting.GetSettings(),
+		esSetting.GetMappings(),
+	)
+
+	templateSettingsBytes, _ := json.Marshal(templateBodyMap)
+
+	req := esapi.IndicesPutTemplateRequest{
+		Name:   name,
+		Body:   bytes.NewBuffer(templateSettingsBytes),
+		Order:  lo.ToPtr(int(0)),
+		Create: lo.ToPtr(true),
+	}
+
+	res, err := req.Do(context.Background(), es)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	// 检查响应状态
+	if res.IsError() {
+		return fmt.Errorf("error creating index: %s", res.String())
+	}
+	return nil
+}

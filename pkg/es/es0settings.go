@@ -23,6 +23,8 @@ type IESSettings interface {
 	ToTargetV7Settings(targetIndex string) *V7Settings
 	ToTargetV8Settings(targetIndex string) *V8Settings
 
+	ToTemplateSettings() map[string]interface{}
+
 	GetIndex() string
 	GetMappings() map[string]interface{}
 	GetSettings() map[string]interface{}
