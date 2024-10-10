@@ -452,7 +452,10 @@ func (m *Migrator) createTemplate() error {
 	}
 
 	targetESSetting := m.GetTargetESSetting(sourceESSetting, matchedIndex)
-	fmt.Println(targetESSetting)
+	templateSetting := targetESSetting.ToTemplateSettings(m.IndexTemplate.Patterns, m.IndexTemplate.Order)
+	if err := m.TargetES.CreateTemplate(m.ctx, m.IndexTemplate.Name, templateSetting); err != nil {
+		return errors.WithStack(err)
+	}
 
 	return nil
 }

@@ -476,3 +476,21 @@ func (es *V8) Count(ctx context.Context, index string) (uint64, error) {
 
 	return cast.ToUint64(countResult["count"]), nil
 }
+
+func (es *V8) CreateTemplate(ctx context.Context, name string, body map[string]interface{}) error {
+	bodyBytes, _ := json.Marshal(body)
+	res, err := es.Client.Indices.PutTemplate(name, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.IsError() {
+		return errors.New(res.String())
+	}
+
+	return nil
+}

@@ -71,7 +71,7 @@ type ES interface {
 
 	Count(ctx context.Context, index string) (uint64, error)
 
-	CreateTemplate(ctx context.Context, esSetting IESSettings, pattern string, name string) error
+	CreateTemplate(ctx context.Context, name string, body map[string]interface{}) error
 }
 
 type V0 struct {

@@ -97,17 +97,30 @@ tasks:
 #    action_parallelism: 2
 #    slice_size: 2
 
-  - name: create-template
+  - name: copy-index
     source_es: es5
-    target_es: es8
-    action: create_template
-    index_templates:
+    target_es: es5
+    action: copy_index
+    index_pairs:
       -
-        name: "template_sample_hello"
-        pattern: ["sample_*", "index_*"]
+        source_index: "sample_hello"
+        target_index: "abc_def"
 
     action_parallelism: 2
     slice_size: 2
+
+#  - name: create-template
+#    source_es: es5
+#    target_es: es8
+#    action: create_template
+#    index_templates:
+#      -
+#        name: "template_sample_hello"
+#        pattern: ["sample_*", "index_*"]
+#        order: 0
+#
+#    action_parallelism: 2
+#    slice_size: 2
 
 #  - name: compare
 #    source_es: es5

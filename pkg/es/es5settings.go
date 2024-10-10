@@ -3,6 +3,7 @@ package es
 import (
 	"fmt"
 	"github.com/jinzhu/copier"
+	"github.com/samber/lo"
 	path "github.com/segment-boneyard/go-map-path"
 	"github.com/spf13/cast"
 	"sort"
@@ -108,9 +109,7 @@ func (v5 *V5Settings) ToESV5Mapping(_ string) map[string]interface{} {
 }
 
 func (v5 *V5Settings) ToAlias() map[string]interface{} {
-	return map[string]interface{}{
-		"aliases": v5.Aliases,
-	}
+	return cast.ToStringMap(v5.Aliases[v5.SourceIndex])
 }
 
 func (v5 *V5Settings) ToESV6Mapping(targetIndex string) map[string]interface{} {
@@ -216,9 +215,9 @@ func (v5 *V5Settings) GetFieldMap() map[string]interface{} {
 	return cast.ToStringMap(properties["properties"])
 }
 
-func (v5 *V5Settings) ToTemplateSettings(name string, patterns []string) map[string]interface{} {
-	return map[string]interface{}{
-		"index_patterns": patterns,
-		"alias":
-	}
+func (v5 *V5Settings) ToTemplateSettings(pattern []string, order int) map[string]interface{} {
+	return lo.Assign(v5.Settings, v5.Mappings, v5.Aliases, map[string]interface{}{
+		"order":          order,
+		"index_patterns": "index_mt4_trades_*",
+	})
 }

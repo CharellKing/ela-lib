@@ -46,6 +46,7 @@ type IndexFilePair struct {
 type IndexTemplate struct {
 	Name     string   `mapstructure:"name"`
 	Patterns []string `mapstructure:"pattern"`
+	Order    int      `mapstructure:"order"`
 }
 
 type ESConfig struct {
