@@ -878,7 +878,12 @@ func (m *Migrator) bulkWorker(docCh <-chan *es2.Doc, index string, total uint64,
 			m.singleBulkWorker(docCh, index, total, &count, operation, errCh)
 		})
 	}
+
 	wg.Wait()
+
+	percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
+	utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
+		percent, count.Load(), total, len(docCh))
 }
 
 func (m *Migrator) singleBulkFileWorker(doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
@@ -944,6 +949,10 @@ func (m *Migrator) bulkFileWorker(doc <-chan *es2.Doc, total uint64, files []str
 		})
 	}
 	wg.Wait()
+
+	percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
+	utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
+		percent, count.Load(), total, len(doc))
 }
 
 func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{}, operation es2.Operation) error {
