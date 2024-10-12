@@ -26,7 +26,7 @@ func NewV5Settings(settings, mappings, aliases map[string]interface{}, sourceInd
 	}
 }
 
-func (v5 *V5Settings) getUnwrappedSettings(_ string) map[string]interface{} {
+func (v5 *V5Settings) getUnwrappedSettings() map[string]interface{} {
 	var copySourceSettings map[string]interface{}
 	_ = copier.Copy(&copySourceSettings, v5.Settings)
 
@@ -38,24 +38,24 @@ func (v5 *V5Settings) getUnwrappedSettings(_ string) map[string]interface{} {
 	return unwrappedSettingMap
 }
 
-func (v5 *V5Settings) ToESV5Setting(targetIndex string) map[string]interface{} {
+func (v5 *V5Settings) ToESV5Setting() map[string]interface{} {
 	return map[string]interface{}{
 		"settings": map[string]interface{}{
-			"index": v5.getUnwrappedSettings(targetIndex),
+			"index": v5.getUnwrappedSettings(),
 		},
 	}
 }
 
-func (v5 *V5Settings) ToESV6Setting(targetIndex string) map[string]interface{} {
-	return v5.ToESV5Setting(targetIndex)
+func (v5 *V5Settings) ToESV6Setting() map[string]interface{} {
+	return v5.ToESV5Setting()
 }
 
-func (v5 *V5Settings) ToESV7Setting(targetIndex string) map[string]interface{} {
-	return v5.ToESV5Setting(targetIndex)
+func (v5 *V5Settings) ToESV7Setting() map[string]interface{} {
+	return v5.ToESV5Setting()
 }
 
-func (v5 *V5Settings) ToESV8Setting(targetIndex string) map[string]interface{} {
-	unwrappedSetting := v5.getUnwrappedSettings(targetIndex)
+func (v5 *V5Settings) ToESV8Setting() map[string]interface{} {
+	unwrappedSetting := v5.getUnwrappedSettings()
 	return map[string]interface{}{
 		"settings": unwrappedSetting,
 	}
@@ -101,7 +101,7 @@ func (v5 *V5Settings) mergeUnWrappedMapping(unwrappedMappings map[string]interfa
 	}
 }
 
-func (v5 *V5Settings) ToESV5Mapping(_ string) map[string]interface{} {
+func (v5 *V5Settings) ToESV5Mapping() map[string]interface{} {
 	unwrappedMappings := v5.getUnwrappedMappings()
 	return map[string]interface{}{
 		"mappings": unwrappedMappings,
@@ -112,11 +112,11 @@ func (v5 *V5Settings) ToAlias() map[string]interface{} {
 	return cast.ToStringMap(v5.Aliases[v5.SourceIndex])
 }
 
-func (v5 *V5Settings) ToESV6Mapping(targetIndex string) map[string]interface{} {
-	return v5.ToESV5Mapping(targetIndex)
+func (v5 *V5Settings) ToESV6Mapping() map[string]interface{} {
+	return v5.ToESV5Mapping()
 }
 
-func (v5 *V5Settings) ToESV7Mapping(_ string) map[string]interface{} {
+func (v5 *V5Settings) ToESV7Mapping() map[string]interface{} {
 	return v5.ToESV8Mapping()
 }
 
@@ -155,31 +155,31 @@ func (v5 *V5Settings) ToESV8Mapping() map[string]interface{} {
 
 func (v5 *V5Settings) ToTargetV5Settings(targetIndex string) *V5Settings {
 	return NewV5Settings(
-		v5.ToESV5Setting(targetIndex),
-		v5.ToESV5Mapping(targetIndex),
+		v5.ToESV5Setting(),
+		v5.ToESV5Mapping(),
 		v5.ToAlias(),
 		targetIndex)
 }
 
 func (v5 *V5Settings) ToTargetV6Settings(targetIndex string) *V6Settings {
 	return NewV6Settings(
-		v5.ToESV6Setting(targetIndex),
-		v5.ToESV6Mapping(targetIndex),
+		v5.ToESV6Setting(),
+		v5.ToESV6Mapping(),
 		v5.ToAlias(),
 		targetIndex)
 }
 
 func (v5 *V5Settings) ToTargetV7Settings(targetIndex string) *V7Settings {
 	return NewV7Settings(
-		v5.ToESV7Setting(targetIndex),
-		v5.ToESV7Mapping(targetIndex),
+		v5.ToESV7Setting(),
+		v5.ToESV7Mapping(),
 		v5.ToAlias(),
 		targetIndex)
 }
 
 func (v5 *V5Settings) ToTargetV8Settings(targetIndex string) *V8Settings {
 	return NewV8Settings(
-		v5.ToESV8Setting(targetIndex),
+		v5.ToESV8Setting(),
 		v5.ToESV8Mapping(),
 		v5.ToAlias(),
 
@@ -215,9 +215,30 @@ func (v5 *V5Settings) GetFieldMap() map[string]interface{} {
 	return cast.ToStringMap(properties["properties"])
 }
 
-func (v5 *V5Settings) ToTemplateSettings(pattern []string, order int) map[string]interface{} {
-	return lo.Assign(v5.Settings, v5.Mappings, v5.Aliases, map[string]interface{}{
+func (v5 *V5Settings) ToV5TemplateSettings(patterns []string, order int) map[string]interface{} {
+	return lo.Assign(v5.ToESV5Setting(), v5.ToESV5Mapping(), v5.ToAlias(), map[string]interface{}{
 		"order":          order,
-		"index_patterns": "index_mt4_trades_*",
+		"index_patterns": patterns,
+	})
+}
+
+func (v5 *V5Settings) ToV6TemplateSettings(patterns []string, order int) map[string]interface{} {
+	return lo.Assign(v5.ToESV6Setting(), v5.ToESV6Mapping(), v5.ToAlias(), map[string]interface{}{
+		"order":          order,
+		"index_patterns": patterns,
+	})
+}
+
+func (v5 *V5Settings) ToV7TemplateSettings(patterns []string, order int) map[string]interface{} {
+	return lo.Assign(v5.ToESV7Setting(), v5.ToESV7Mapping(), v5.ToAlias(), map[string]interface{}{
+		"order":          order,
+		"index_patterns": patterns,
+	})
+}
+
+func (v5 *V5Settings) ToV8TemplateSettings(patterns []string, order int) map[string]interface{} {
+	return lo.Assign(v5.ToESV8Setting(), v5.ToESV8Mapping(), v5.ToAlias(), map[string]interface{}{
+		"order":          order,
+		"index_patterns": patterns,
 	})
 }

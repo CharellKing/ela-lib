@@ -8,14 +8,14 @@ import (
 )
 
 type IESSettings interface {
-	ToESV5Setting(targetIndex string) map[string]interface{}
-	ToESV6Setting(targetIndex string) map[string]interface{}
-	ToESV7Setting(targetIndex string) map[string]interface{}
-	ToESV8Setting(targetIndex string) map[string]interface{}
+	ToESV5Setting() map[string]interface{}
+	ToESV6Setting() map[string]interface{}
+	ToESV7Setting() map[string]interface{}
+	ToESV8Setting() map[string]interface{}
 
-	ToESV5Mapping(targetIndex string) map[string]interface{}
-	ToESV6Mapping(targetIndex string) map[string]interface{}
-	ToESV7Mapping(targetIndex string) map[string]interface{}
+	ToESV5Mapping() map[string]interface{}
+	ToESV6Mapping() map[string]interface{}
+	ToESV7Mapping() map[string]interface{}
 	ToESV8Mapping() map[string]interface{}
 
 	ToTargetV5Settings(targetIndex string) *V5Settings
@@ -23,7 +23,10 @@ type IESSettings interface {
 	ToTargetV7Settings(targetIndex string) *V7Settings
 	ToTargetV8Settings(targetIndex string) *V8Settings
 
-	ToTemplateSettings(pattern []string, order int) map[string]interface{}
+	ToV5TemplateSettings(pattern []string, order int) map[string]interface{}
+	ToV6TemplateSettings(pattern []string, order int) map[string]interface{}
+	ToV7TemplateSettings(pattern []string, order int) map[string]interface{}
+	ToV8TemplateSettings(pattern []string, order int) map[string]interface{}
 
 	GetIndex() string
 	GetMappings() map[string]interface{}
