@@ -30,6 +30,8 @@ type BulkMigrator struct {
 
 	IndexFilePairMap map[string]*config.IndexFilePair
 
+	IndexTemplates map[string]*config.IndexTemplate
+
 	Error error
 
 	ScrollSize uint
@@ -120,6 +122,7 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexPair)
@@ -158,6 +161,7 @@ func (m *BulkMigrator) WithIndexFilePairs(indexFilePairs ...*config.IndexFilePai
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexFilePair)
@@ -169,6 +173,44 @@ func (m *BulkMigrator) WithIndexFilePairs(indexFilePairs ...*config.IndexFilePai
 
 	if len(newIndexPairsMap) > 0 {
 		newBulkMigrator.IndexFilePairMap = lo.Assign(newBulkMigrator.IndexFilePairMap, newIndexPairsMap)
+	}
+	return newBulkMigrator
+}
+
+func (m *BulkMigrator) WithIndexTemplates(indexTemplates ...*config.IndexTemplate) *BulkMigrator {
+	if m.Error != nil {
+		return m
+	}
+
+	newBulkMigrator := &BulkMigrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
+		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
+	}
+
+	newIndexTemplateMap := make(map[string]*config.IndexTemplate)
+	for _, indexTemplate := range indexTemplates {
+		if _, ok := newIndexTemplateMap[indexTemplate.Name]; !ok {
+			newIndexTemplateMap[indexTemplate.Name] = indexTemplate
+		}
+	}
+
+	if len(newIndexTemplateMap) > 0 {
+		newBulkMigrator.IndexTemplates = lo.Assign(newBulkMigrator.IndexTemplates, newIndexTemplateMap)
 	}
 	return newBulkMigrator
 }
@@ -195,6 +237,7 @@ func (m *BulkMigrator) WithIndexFileRoot(indexFileRoot string) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     indexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 
 	return newBulkMigrator
@@ -226,6 +269,7 @@ func (m *BulkMigrator) WithScrollSize(scrollSize uint) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -254,6 +298,7 @@ func (m *BulkMigrator) WithScrollTime(scrollTime uint) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -282,6 +327,7 @@ func (m *BulkMigrator) WithSliceSize(sliceSize uint) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -310,6 +356,7 @@ func (m *BulkMigrator) WithBufferCount(bufferCount uint) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -339,6 +386,7 @@ func (m *BulkMigrator) WithActionParallelism(actionParallelism uint) *BulkMigrat
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -368,6 +416,7 @@ func (m *BulkMigrator) WithActionSize(actionSize uint) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -422,6 +471,7 @@ func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 
 	return newBulkMigrator
@@ -452,6 +502,7 @@ func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -477,6 +528,7 @@ func (m *BulkMigrator) WithIds(ids []string) *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -498,6 +550,7 @@ func (m *BulkMigrator) clone() *BulkMigrator {
 		IndexFilePairMap:  m.IndexFilePairMap,
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
 	}
 }
 
@@ -586,6 +639,15 @@ func (m *BulkMigrator) CopyIndexSettings(force bool) error {
 	newBulkMigrator.parallelRun(func(migrator *Migrator) {
 		if err := migrator.CopyIndexSettings(force); err != nil {
 			utils.GetLogger(migrator.GetCtx()).Errorf("copyIndexSettings %+v", err)
+		}
+	})
+	return nil
+}
+
+func (m *BulkMigrator) CreateTemplates() error {
+	m.parallelRunWithIndexTemplate(func(migrator *Migrator) {
+		if err := migrator.CreateTemplate(); err != nil {
+			utils.GetLogger(migrator.GetCtx()).Errorf("createTemplate %+v", err)
 		}
 	})
 	return nil
@@ -757,6 +819,30 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 	for _, indexPair := range m.IndexPairMap {
 		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES)
 		newMigrator = newMigrator.WithIndexPair(*indexPair).
+			WithScrollSize(m.ScrollSize).
+			WithScrollTime(m.ScrollTime).
+			WithSliceSize(m.SliceSize).
+			WithBufferCount(m.BufferCount).
+			WithActionParallelism(m.ActionParallelism).
+			WithActionSize(m.ActionSize).
+			WithIds(m.Ids)
+
+		pool.Submit(func() {
+			callback(newMigrator)
+			finishCount.Add(1)
+			utils.GetLogger(newMigrator.GetCtx()).Infof("task progress %0.4f (%d, %d)", float64(finishCount.Load())/float64(len(m.IndexPairMap)), finishCount.Load(), len(m.IndexPairMap))
+		})
+	}
+	pool.StopAndWait()
+}
+
+func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migrator)) {
+	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
+	finishCount := atomic.Int32{}
+
+	for _, indexTemplate := range m.IndexTemplates {
+		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES)
+		newMigrator = newMigrator.WithIndexTemplate(*indexTemplate).
 			WithScrollSize(m.ScrollSize).
 			WithScrollTime(m.ScrollTime).
 			WithSliceSize(m.SliceSize).

@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cast"
 	"hash/fnv"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,6 +58,8 @@ type Migrator struct {
 	ActionParallelism uint
 
 	IndexFilePair *config.IndexFilePair
+
+	IndexTemplate *config.IndexTemplate
 
 	FileDir string
 
@@ -169,6 +172,29 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
+	}
+}
+
+func (m *Migrator) WithIndexTemplate(indexTemplate config.IndexTemplate) *Migrator {
+	if m.err != nil {
+		return m
+	}
+	return &Migrator{
+		err:               m.err,
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     &indexTemplate,
 	}
 }
 
@@ -194,6 +220,7 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -219,6 +246,7 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -243,6 +271,7 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -267,6 +296,7 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -291,6 +321,7 @@ func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -316,6 +347,7 @@ func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 		ActionSize:        actionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -337,6 +369,7 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 		ActionSize:        m.ActionSize,
 		Ids:               ids,
 		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -358,6 +391,7 @@ func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migra
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePair:     indexFilePair,
+		IndexTemplate:     m.IndexTemplate,
 	}
 }
 
@@ -372,6 +406,65 @@ func (m *Migrator) CopyIndexSettings(force bool) error {
 	}
 
 	if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (m *Migrator) createTemplate() error {
+	indexes, err := m.SourceES.GetIndexes()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	var newPatterns []string
+	for _, pattern := range m.IndexTemplate.Patterns {
+		newPatterns = append(newPatterns, fmt.Sprintf("^%s$", strings.ReplaceAll(pattern, "*", ".*")))
+	}
+
+	var matchedIndex string
+	for _, index := range indexes {
+		for _, pattern := range newPatterns {
+			ok, err := regexp.Match(pattern, []byte(index))
+			if err != nil {
+				return errors.WithStack(err)
+			}
+
+			if ok {
+				matchedIndex = index
+				break
+			}
+		}
+
+		if matchedIndex != "" {
+			break
+		}
+	}
+
+	if lo.IsEmpty(matchedIndex) {
+		return errors.New("no matched pattern index in source es")
+	}
+
+	sourceESSetting, err := m.SourceES.GetIndexMappingAndSetting(matchedIndex)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	templateSetting := m.GetTargetESTemplateSetting(sourceESSetting, m.IndexTemplate.Patterns, m.IndexTemplate.Order)
+	if err := m.TargetES.CreateTemplate(m.ctx, m.IndexTemplate.Name, templateSetting); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (m *Migrator) CreateTemplate() error {
+	if m.err != nil {
+		return errors.WithStack(m.err)
+	}
+
+	if err := m.createTemplate(); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -974,8 +1067,8 @@ func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{},
 	return errs.Ret()
 }
 
-func (m *Migrator) copyIndexSettings(ctx context.Context, index string, force bool) error {
-	existed, err := m.TargetES.IndexExisted(index)
+func (m *Migrator) copyIndexSettings(ctx context.Context, targetIndex string, force bool) error {
+	existed, err := m.TargetES.IndexExisted(targetIndex)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -985,14 +1078,14 @@ func (m *Migrator) copyIndexSettings(ctx context.Context, index string, force bo
 	}
 
 	if existed {
-		if err := m.TargetES.DeleteIndex(index); err != nil {
+		if err := m.TargetES.DeleteIndex(targetIndex); err != nil {
 			return errors.WithStack(err)
 		}
 	}
 
 	sourceESSetting := utils.GetCtxKeySourceIndexSetting(ctx).(es2.IESSettings)
 
-	targetESSetting := m.GetTargetESSetting(sourceESSetting, index)
+	targetESSetting := m.GetTargetESSetting(sourceESSetting, targetIndex)
 
 	if err := m.TargetES.CreateIndex(targetESSetting); err != nil {
 		return errors.WithStack(err)
@@ -1001,15 +1094,29 @@ func (m *Migrator) copyIndexSettings(ctx context.Context, index string, force bo
 	return nil
 }
 
-func (m *Migrator) GetTargetESSetting(sourceESSetting es2.IESSettings, index string) es2.IESSettings {
+func (m *Migrator) GetTargetESSetting(sourceESSetting es2.IESSettings, targetIndex string) es2.IESSettings {
 	if strings.HasPrefix(m.TargetES.GetClusterVersion(), "8.") {
-		return sourceESSetting.ToTargetV8Settings(index)
+		return sourceESSetting.ToTargetV8Settings(targetIndex)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "7.") {
-		return sourceESSetting.ToTargetV7Settings(index)
+		return sourceESSetting.ToTargetV7Settings(targetIndex)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "6.") {
-		return sourceESSetting.ToTargetV6Settings(index)
+		return sourceESSetting.ToTargetV6Settings(targetIndex)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "5.") {
-		return sourceESSetting.ToTargetV5Settings(index)
+		return sourceESSetting.ToTargetV5Settings(targetIndex)
+	}
+
+	return nil
+}
+
+func (m *Migrator) GetTargetESTemplateSetting(sourceESSetting es2.IESSettings, patterns []string, order int) map[string]interface{} {
+	if strings.HasPrefix(m.TargetES.GetClusterVersion(), "8.") {
+		return sourceESSetting.ToV8TemplateSettings(patterns, order)
+	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "7.") {
+		return sourceESSetting.ToV7TemplateSettings(patterns, order)
+	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "6.") {
+		return sourceESSetting.ToV6TemplateSettings(patterns, order)
+	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "5.") {
+		return sourceESSetting.ToV5TemplateSettings(patterns, order)
 	}
 
 	return nil

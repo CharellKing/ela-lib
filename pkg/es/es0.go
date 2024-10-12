@@ -70,6 +70,8 @@ type ES interface {
 	DeleteIndex(index string) error
 
 	Count(ctx context.Context, index string) (uint64, error)
+
+	CreateTemplate(ctx context.Context, name string, body map[string]interface{}) error
 }
 
 type V0 struct {
