@@ -118,13 +118,13 @@ func (es *V8) NewScroll(ctx context.Context, index string, option *ScrollOption)
 		return nil, errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	if res.IsError() {
-		return nil, errors.New(res.String())
-	}
 
 	var scrollResult ScrollResultV8
 
@@ -151,13 +151,13 @@ func (es *V8) NextScroll(ctx context.Context, scrollId string, scrollTime uint) 
 		return nil, errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	if res.IsError() {
-		return nil, errors.New(res.String())
-	}
 
 	var scrollResult ScrollResultV8
 	if err := json.NewDecoder(res.Body).Decode(&scrollResult); err != nil {
@@ -183,13 +183,13 @@ func (es *V8) ClearScroll(scrollId string) error {
 		return errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	if res.IsError() {
-		return errors.New(res.String())
-	}
 
 	return nil
 }
@@ -224,20 +224,20 @@ func (es *V8) GetIndexMappingAndSetting(index string) (IESSettings, error) {
 
 func (es *V8) GetIndexAliases(index string) (map[string]interface{}, error) {
 	// Get alias configuration
-	aliasRes, err := es.Client.Indices.GetAlias(es.Client.Indices.GetAlias.WithIndex(index))
+	res, err := es.Client.Indices.GetAlias(es.Client.Indices.GetAlias.WithIndex(index))
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	defer func() {
-		_ = aliasRes.Body.Close()
-	}()
-
-	if aliasRes.IsError() {
-		return nil, fmt.Errorf("error: %s", aliasRes.String())
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
 	}
 
-	bodyBytes, err := io.ReadAll(aliasRes.Body)
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -251,20 +251,20 @@ func (es *V8) GetIndexAliases(index string) (map[string]interface{}, error) {
 
 func (es *V8) GetIndexMapping(index string) (map[string]interface{}, error) {
 	// Get settings
-	mappingRes, err := es.Client.Indices.GetMapping(es.Client.Indices.GetMapping.WithIndex(index))
+	res, err := es.Client.Indices.GetMapping(es.Client.Indices.GetMapping.WithIndex(index))
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	defer func() {
-		_ = mappingRes.Body.Close()
-	}()
-
-	if mappingRes.IsError() {
-		return nil, fmt.Errorf("error: %s", mappingRes.String())
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
 	}
 
-	bodyBytes, err := io.ReadAll(mappingRes.Body)
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -278,21 +278,21 @@ func (es *V8) GetIndexMapping(index string) (map[string]interface{}, error) {
 
 func (es *V8) GetIndexSettings(index string) (map[string]interface{}, error) {
 	// Get settings
-	settingRes, err := es.Client.Indices.GetSettings(es.Client.Indices.GetSettings.WithIndex(index))
+	res, err := es.Client.Indices.GetSettings(es.Client.Indices.GetSettings.WithIndex(index))
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	defer func() {
-		_ = settingRes.Body.Close()
-	}()
-
-	if settingRes.IsError() {
-		return nil, fmt.Errorf("error: %s", settingRes.String())
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
 	}
 
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
 	var indexSetting map[string]interface{}
-	if err := json.NewDecoder(settingRes.Body).Decode(&indexSetting); err != nil {
+	if err := json.NewDecoder(res.Body).Decode(&indexSetting); err != nil {
 		return nil, errors.WithStack(err)
 	}
 
@@ -317,14 +317,14 @@ func (es *V8) CreateIndex(esSetting IESSettings) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
+
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	// 检查响应状态
-	if res.IsError() {
-		return fmt.Errorf("error creating index: %s", res.String())
-	}
 
 	return nil
 }
@@ -339,13 +339,13 @@ func (es *V8) IndexExisted(indexName string) (bool, error) {
 		return false, nil
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return false, formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	if res.IsError() {
-		return false, fmt.Errorf("error checking index existence: %s", res.String())
-	}
 
 	return res.StatusCode == 200, nil
 }
@@ -356,13 +356,13 @@ func (es *V8) DeleteIndex(index string) error {
 		return errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	if res.IsError() {
-		return errors.New(res.String())
-	}
 
 	return nil
 }
@@ -411,14 +411,14 @@ func (es *V8) Bulk(buf *bytes.Buffer) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
+
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	// Handle the response
-	if res.IsError() {
-		return errors.WithStack(fmt.Errorf("error executing bulk update: %s", res.String()))
-	}
 	return nil
 }
 
@@ -429,16 +429,13 @@ func (es *V8) GetIndexes() ([]string, error) {
 		return nil, err
 	}
 
-	defer func() {
-		err := res.Body.Close()
-		if err != nil {
-			log.Printf("Error closing response body: %s", err)
-		}
-	}()
-
-	if res.IsError() {
-		return nil, fmt.Errorf("error: %s", res.String())
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
 	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
 	var indices []string
 	scanner := bufio.NewScanner(res.Body)
@@ -461,13 +458,13 @@ func (es *V8) Count(ctx context.Context, index string) (uint64, error) {
 		return 0, errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return 0, formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
-
-	if res.IsError() {
-		return 0, errors.New(res.String())
-	}
 
 	var countResult map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&countResult); err != nil {
