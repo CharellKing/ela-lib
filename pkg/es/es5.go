@@ -513,3 +513,17 @@ func (es *V5) CreateTemplate(ctx context.Context, name string, body map[string]i
 
 	return nil
 }
+
+func (es *V5) ClusterHealth(ctx context.Context) {
+	// Get Cluster Health
+	res, err := es.Client.Cluster.Health()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	formatError
+}

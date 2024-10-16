@@ -60,4 +60,11 @@ type Config struct {
 	Tasks             []*TaskCfg           `mapstructure:"tasks"`
 	Level             string               `mapstructure:"level"`
 	IgnoreSystemIndex bool                 `mapstructure:"ignore_system_index"`
+	GatewayCfg        *GatewayCfg          `mapstructure:"gateway"`
+}
+
+type GatewayCfg struct {
+	Address  string `mapstructure:"address"`
+	SourceES string `mapstructure:"source_es"`
+	TargetES string `mapstructure:"target_es"`
 }
