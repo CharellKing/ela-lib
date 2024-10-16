@@ -832,7 +832,8 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 		}()
 
 		for {
-			if scrollResult == nil {
+			if scrollResult == nil || len(scrollResult.Docs) <= 0 {
+				utils.GetLogger(m.GetCtx()).Infof("scroll slice %d exit", lo.Ternary(sliceId != nil, *sliceId, 0))
 				break
 			}
 
@@ -852,9 +853,6 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 				docCh <- doc
 			}
 
-			if len(scrollResult.Docs) < cast.ToInt(m.ScrollSize) {
-				break
-			}
 			if scrollResult, err = es.NextScroll(ctx, scrollResult.ScrollId, m.ScrollTime); err != nil {
 				utils.GetLogger(m.GetCtx()).Errorf("searchSingleSlice error: %+v", err)
 				errCh <- errors.WithStack(err)
@@ -973,7 +971,12 @@ func (m *Migrator) bulkWorker(docCh <-chan *es2.Doc, index string, total uint64,
 			m.singleBulkWorker(docCh, index, total, &count, operation, errCh)
 		})
 	}
+
 	wg.Wait()
+
+	percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
+	utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
+		percent, count.Load(), total, len(docCh))
 }
 
 func (m *Migrator) singleBulkFileWorker(doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
@@ -1039,6 +1042,10 @@ func (m *Migrator) bulkFileWorker(doc <-chan *es2.Doc, total uint64, files []str
 		})
 	}
 	wg.Wait()
+
+	percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
+	utils.GetLogger(m.GetCtx()).Infof("bulk progress %.4f (%d, %d, %d)",
+		percent, count.Load(), total, len(doc))
 }
 
 func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{}, operation es2.Operation) error {

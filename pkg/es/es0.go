@@ -162,3 +162,14 @@ func (es *V0) Get(url string) ([]byte, error) {
 
 	return bodyBytes, nil
 }
+
+type IResponse interface {
+	String() string
+	Status() string
+}
+
+func formatError(res IResponse) error {
+	statusStr := res.Status()
+	bodyStr := res.String()
+	return errors.Errorf("status: %s, body: %s", statusStr, bodyStr)
+}

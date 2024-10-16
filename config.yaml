@@ -73,17 +73,29 @@ tasks:
 #    action_parallelism: 2
 #    slice_size: 1
 
-#  - name: sync
-#    source_es: es5
-#    target_es: es8
-#    action: sync
-#    index_pairs:
-#      -
-#        source_index: "sample_index"
-#        target_index: "sample_hello31"
-#
-#    action_parallelism: 2
-#    slice_size: 2
+  - name: sync
+    source_es: es5
+    target_es: es8
+    action: sync
+    index_pattern: .*
+    index_pairs:
+      -
+        source_index: "sample_index"
+        target_index: "sample_hello31"
+
+    scroll_size: 201
+    slice_size: 202
+    scroll_time: 203
+    parallelism: 204
+    buffer_count: 205
+    action_parallelism: 206
+    action_size: 207
+    ids:
+      - "1"
+      - "2"
+      - "3"
+
+    force: true
 
 #  - name: sync-diff
 #    source_es: es5
@@ -96,31 +108,6 @@ tasks:
 #
 #    action_parallelism: 2
 #    slice_size: 2
-
-#  - name: copy-index
-#    source_es: es5
-#    target_es: es5
-#    action: copy_index
-#    index_pairs:
-#      -
-#        source_index: "sample_hello"
-#        target_index: "abc_def"
-#
-#    action_parallelism: 2
-#    slice_size: 2
-
-  - name: create-template
-    source_es: es5
-    target_es: es6
-    action: create_template
-    index_templates:
-      -
-        name: "template_sample_hello"
-        pattern: ["sample_*", "index_*"]
-        order: 0
-
-    action_parallelism: 2
-    slice_size: 2
 
 #  - name: compare
 #    source_es: es5
