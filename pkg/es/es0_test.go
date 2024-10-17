@@ -49,6 +49,4 @@ func TestGetClient(t *testing.T) {
 	}
 
 	t.Log(resp)
-
-	resp, err = client.GetDocument(ctx, "test", "test", "1")
 }

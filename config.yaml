@@ -158,9 +158,8 @@ tasks:
 
 gateway:
   gateway_address: "0.0.0.0:8080"
-  gateway_user: "user",
-  gateway_password: "12342",
-
+  gateway_user: "user"
+  gateway_password: "12342"
   source_es: es5
   target_es: es8
   master: es5

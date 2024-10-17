@@ -1,9 +1,4 @@
-package handler
-
-import (
-	es2 "github.com/CharellKing/ela-lib/pkg/es"
-	"github.com/gin-gonic/gin"
-)
+package es
 
 const (
 	RequestActionGetInfo = "get-info"
@@ -39,28 +34,4 @@ type UriPathParserResult struct {
 	IndexType     string
 	DocumentId    string
 	Uri           string
-}
-
-type ActionHandler interface {
-	Run(c *gin.Context)
-}
-
-type newActionHandler func(sourceES, targetES es2.ES, result *UriPathParserResult) ActionHandler
-
-var actionHandlerMap map[string]newActionHandler
-
-func registerHandler(actionType string, handler newActionHandler) {
-	if actionHandlerMap == nil {
-		actionHandlerMap = make(map[string]newActionHandler)
-	}
-
-	actionHandlerMap[actionType] = handler
-}
-
-func GetHandler(actionType string, sourceES, targetES es2.ES, result *UriPathParserResult) ActionHandler {
-	if handler, ok := actionHandlerMap[actionType]; ok {
-		return handler(sourceES, targetES, result)
-	}
-
-	return nil
 }
