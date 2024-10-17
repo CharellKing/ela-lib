@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"github.com/CharellKing/ela-lib/config"
+	"github.com/spf13/cast"
 	"io"
 	"net/http"
 	"strings"
@@ -52,6 +53,7 @@ type ScrollOption struct {
 	SliceId    *uint
 	SliceSize  *uint
 }
+
 type ES interface {
 	GetClusterVersion() string
 	IndexExisted(index string) (bool, error)
@@ -72,6 +74,15 @@ type ES interface {
 	Count(ctx context.Context, index string) (uint64, error)
 
 	CreateTemplate(ctx context.Context, name string, body map[string]interface{}) error
+
+	ClusterHealth(ctx context.Context) (map[string]interface{}, error)
+
+	GetInfo(ctx context.Context) (map[string]interface{}, error)
+
+	GetAddresses() []string
+
+	GetUser() string
+	GetPassword() string
 }
 
 type V0 struct {
@@ -172,4 +183,10 @@ func formatError(res IResponse) error {
 	statusStr := res.Status()
 	bodyStr := res.String()
 	return errors.Errorf("status: %s, body: %s", statusStr, bodyStr)
+}
+
+func ClusterVersionGte7(es ES) bool {
+	clusterVersion := es.GetClusterVersion()
+	segments := strings.Split(clusterVersion, ".")
+	return cast.ToInt(segments[0]) >= 7
 }

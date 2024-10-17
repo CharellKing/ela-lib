@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/CharellKing/ela-lib/pkg/es"
 	"github.com/CharellKing/ela-lib/utils"
@@ -16,18 +16,30 @@ func TestClusterHealth(t *testing.T) {
 	viper.SetConfigType("yaml")
 
 	if err := viper.ReadInConfig(); err != nil {
-		fmt.Printf("Unable reading config file, %v\n", err)
+		t.Error(err)
 		return
 	}
 
 	var cfg config.Config
 	if err := viper.Unmarshal(&cfg); err != nil {
-		fmt.Printf("Unable to decode into struct, %v\n", err)
+		t.Error(err)
 		return
 	}
 
 	utils.InitLogger(&cfg)
 	ctx := context.Background()
-	esInstance := es.NewESV0(cfg.ESConfigs["es5"])
-	esInstance.
+	v0 := es.NewESV0(cfg.ESConfigs["es5"])
+	esInstance, err := v0.GetES()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	resp, err := esInstance.ClusterHealth(ctx)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	respStr, _ := json.MarshalIndent(resp, "", "  ")
+	t.Log(string(respStr))
 }

@@ -6,31 +6,39 @@ import (
 )
 
 const (
+	RequestActionGetInfo = "get-info"
+
+	RequestActionDocument       = "get-document"
 	RequestActionUpsertDocument = "upsert-document"
 	RequestActionCreateDocument = "create-document"
 	RequestActionUpdateDocument = "update-document"
+	RequestActionDeleteDocument = "delete-document"
+	RequestActionBulk           = "bulk-document"
 
-	RequestActionSearch              = "search-document"
-	RequestActionSearchLimit         = "search-limit-document"
-	RequestActionDocument            = "get-document"
-	RequestActionDeleteDocument      = "delete-document"
-	RequestActionBulk                = "bulk-document"
-	RequestActionCreateIndex         = "create-index"
-	RequestActionGetIndex            = "get-index"
-	RequestActionDeleteIndex         = "delete-index"
-	RequestActionClusterHealth       = "cluster-health"
-	RequestActionClusterSettings     = "cluster-settings"
-	RequestActionGetIndexMapping     = "get-index-mapping"
-	RequestActionUpdateIndexMapping  = "update-index-mapping"
+	RequestActionSearch      = "search-document"
+	RequestActionSearchLimit = "search-limit-document"
+
+	RequestActionCreateIndex = "create-index"
+	RequestActionGetIndex    = "get-index"
+	RequestActionDeleteIndex = "delete-index"
+
+	RequestActionClusterHealth   = "cluster-health"
+	RequestActionClusterSettings = "cluster-settings"
+
+	RequestActionGetIndexMapping    = "get-index-mapping"
+	RequestActionUpdateIndexMapping = "update-index-mapping"
+
 	RequestActionGetIndexSettings    = "get-index-settings"
 	RequestActionUpdateIndexSettings = "update-index-settings"
 )
 
 type UriPathParserResult struct {
+	HttpAction    string
 	RequestAction string
 	Index         string
 	IndexType     string
 	DocumentId    string
+	Uri           string
 }
 
 type ActionHandler interface {

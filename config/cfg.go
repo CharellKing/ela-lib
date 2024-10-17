@@ -64,7 +64,11 @@ type Config struct {
 }
 
 type GatewayCfg struct {
-	Address  string `mapstructure:"address"`
+	Address  string `mapstructure:"gateway_address"`
+	User     string `mapstructure:"gateway_user"`
+	Password string `mapstructure:"gateway_password"`
+
 	SourceES string `mapstructure:"source_es"`
 	TargetES string `mapstructure:"target_es"`
+	Master   string `mapstructure:"master"`
 }

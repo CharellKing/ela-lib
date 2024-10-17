@@ -27,6 +27,9 @@ type V8 struct {
 	*elasticsearch8.Client
 	ClusterVersion string
 	Settings       IESSettings
+	Addresses      []string
+	User           string
+	Password       string
 }
 
 func NewESV8(esConfig *config.ESConfig, clusterVersion string) (*V8, error) {
@@ -50,6 +53,9 @@ func NewESV8(esConfig *config.ESConfig, clusterVersion string) (*V8, error) {
 	return &V8{
 		Client:         client,
 		ClusterVersion: clusterVersion,
+		Addresses:      esConfig.Addresses,
+		User:           esConfig.User,
+		Password:       esConfig.Password,
 	}, nil
 }
 
@@ -481,13 +487,71 @@ func (es *V8) CreateTemplate(ctx context.Context, name string, body map[string]i
 		return errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
 
-	if res.IsError() {
-		return errors.New(res.String())
+	return nil
+}
+
+func (es *V8) ClusterHealth(ctx context.Context) (map[string]interface{}, error) {
+	// Get Cluster Health
+	res, err := es.Client.Cluster.Health()
+	if err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	return nil
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	var clusterHealthResp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&clusterHealthResp); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return clusterHealthResp, nil
+}
+
+func (es *V8) GetInfo(ctx context.Context) (map[string]interface{}, error) {
+	// Get Cluster Health
+	res, err := es.Client.Cluster.GetSettings()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	var clusterHealthResp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&clusterHealthResp); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return clusterHealthResp, nil
+}
+
+func (es *V8) GetAddresses() []string {
+	return es.Addresses
+}
+
+func (es *V8) GetUser() string {
+	return es.User
+}
+
+func (es *V8) GetPassword() string {
+	return es.Password
 }

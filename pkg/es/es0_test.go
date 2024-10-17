@@ -1,6 +1,7 @@
 package es
 
 import (
+	"context"
 	"github.com/CharellKing/ela-lib/config"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestGetVersion(t *testing.T) {
 func TestGetClient(t *testing.T) {
 	esConfig := &config.ESConfig{
 		Addresses: []string{
-			"http://127.0.0.1:15200",
+			"http://127.0.0.1:8080",
 		},
 		User:     "",
 		Password: "",
@@ -39,5 +40,15 @@ func TestGetClient(t *testing.T) {
 		t.Errorf("%+v", err)
 		return
 	}
-	t.Logf("version: %+v", client)
+
+	ctx := context.Background()
+	resp, err := client.ClusterHealth(ctx)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	t.Log(resp)
+
+	resp, err = client.GetDocument(ctx, "test", "test", "1")
 }

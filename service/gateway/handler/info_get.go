@@ -5,15 +5,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ClusterHealth struct {
+type InfoGet struct {
 	SourceES es2.ES
 	TargetES es2.ES
 
 	Result *UriPathParserResult
 }
 
-func newClusterHealth(sourceES, targetES es2.ES, result *UriPathParserResult) ActionHandler {
-	return &ClusterHealth{
+func newInfoGet(sourceES, targetES es2.ES, result *UriPathParserResult) ActionHandler {
+	return &InfoGet{
 		SourceES: sourceES,
 		TargetES: targetES,
 		Result:   result,
@@ -21,11 +21,11 @@ func newClusterHealth(sourceES, targetES es2.ES, result *UriPathParserResult) Ac
 }
 
 func init() {
-	registerHandler(RequestActionClusterHealth, newClusterHealth)
+	registerHandler(RequestActionGetInfo, newInfoGet)
 }
 
-func (handler *ClusterHealth) Run(c *gin.Context) {
-	resp, err := handler.SourceES.ClusterHealth(c)
+func (handler *InfoGet) Run(c *gin.Context) {
+	resp, err := handler.SourceES.GetInfo(c)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": err.Error(),
