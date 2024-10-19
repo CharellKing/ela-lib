@@ -81,19 +81,11 @@ func NewESGateway(cfg *config.Config) (*ESGateway, error) {
 	}, nil
 }
 
-func (gateway *ESGateway) parseUriPath(httpAction, uriPath string, esInstance es.ES) (*es.UriPathParserResult, error) {
-	var (
-		result es.UriPathParserResult
-	)
-
-	var needType bool
-	clusterVersion := esInstance.GetClusterVersion()
-	if strings.HasPrefix(clusterVersion, "5.") || strings.HasPrefix(clusterVersion, "6.") {
-		needType = true
-	}
-
+func (gateway *ESGateway) parseTypeUriPath(httpAction, uriPath string) (*es.UriPathParserResult, error) {
+	var result es.UriPathParserResult
 	result.HttpAction = httpAction
-	result.Uri = uriPath
+	result.UriWithType = uriPath
+	result.UriWithoutType = uriPath
 
 	if uriPath == "/" && httpAction == "GET" {
 		result.RequestAction = es.RequestActionGetInfo
@@ -101,125 +93,114 @@ func (gateway *ESGateway) parseUriPath(httpAction, uriPath string, esInstance es
 	}
 
 	segments := strings.Split(uriPath, "/")
-	if strings.HasSuffix("/_create", uriPath) {
-		if httpAction == "POST" {
-			result.RequestAction = es.RequestActionCreateDocument
-		}
+
+	if strings.HasSuffix("/_create", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionCreateDocument
 		result.Index = segments[1]
-		if len(segments) == 5 {
-			result.IndexType = segments[2]
-			result.DocumentId = segments[3]
-			if !needType {
-				result.Uri = strings.Join(append(segments[:2], segments[3:]...), "/")
-			}
-		} else if len(segments) == 4 {
-			result.DocumentId = segments[2]
-		}
+		result.IndexType = segments[2]
+		result.DocumentId = segments[3]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
 		return &result, nil
 	}
 
-	if strings.HasSuffix("/_update", uriPath) {
-		if httpAction == "POST" {
-			result.RequestAction = es.RequestActionUpdateDocument
-		}
-
+	if strings.HasSuffix("/_update", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionUpdateDocument
 		result.Index = segments[1]
-		if len(segments) == 5 {
-			result.IndexType = segments[2]
-			result.DocumentId = segments[3]
-			if !needType {
-				result.Uri = strings.Join(append(segments[:2], segments[3:]...), "/")
-			}
-		} else if len(segments) == 4 {
-			result.DocumentId = segments[2]
-		}
+		result.IndexType = segments[2]
+		result.DocumentId = segments[3]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
 		return &result, nil
 	}
 
-	if strings.HasSuffix("/_search", uriPath) {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionSearch
-		}
-
-		if httpAction == "POST" {
-			result.RequestAction = es.RequestActionSearchLimit
-		}
-
+	if strings.HasSuffix("/_search", uriPath) && httpAction == "GET" {
+		result.RequestAction = es.RequestActionSearch
 		result.Index = segments[1]
-		if len(segments) == 4 {
-			result.IndexType = segments[2]
-			if !needType {
-				result.Uri = strings.Join(append(segments[:2], segments[3:]...), "/")
-			}
-		}
+		result.IndexType = segments[2]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
 		return &result, nil
 	}
 
-	if uriPath == "/_cluster/health" {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionClusterHealth
-		}
-		return &result, nil
-	}
-
-	if uriPath == "/_cluster/settings" {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionClusterSettings
-		}
-		return &result, nil
-	}
-
-	if strings.HasSuffix(uriPath, "/_mapping") {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionGetIndexMapping
-		}
-
-		if httpAction == "PUT" {
-			result.RequestAction = es.RequestActionUpdateIndexMapping
-		}
-
+	if strings.HasSuffix("/_search", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionSearchLimit
 		result.Index = segments[1]
-		if len(segments) == 4 {
-			result.IndexType = segments[2]
-			if !needType {
-				result.Uri = strings.Join(append(segments[:2], segments[3:]...), "/")
-			}
-		}
-
-		return &result, nil
-
-	}
-
-	if strings.HasSuffix(uriPath, "/_settings") {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionGetIndexSettings
-		}
-
-		if httpAction == "PUT" {
-			result.RequestAction = es.RequestActionUpdateIndexSettings
-		}
-
-		result.Index = segments[1]
-
+		result.IndexType = segments[2]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
 		return &result, nil
 	}
 
-	if strings.HasSuffix(uriPath, "/_bulk") {
+	if strings.HasSuffix("/_bulk", uriPath) && httpAction == "POST" {
 		result.RequestAction = es.RequestActionBulk
+		return &result, nil
+	}
 
+	if "/_cluster/health" == uriPath && httpAction == "GET" {
+		result.RequestAction = es.RequestActionClusterHealth
+		return &result, nil
+	}
+
+	if "/_cluster/settings" == uriPath && httpAction == "GET" {
+		result.RequestAction = es.RequestActionClusterSettings
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_mapping") && httpAction == "GET" {
+		result.RequestAction = es.RequestActionGetIndexMapping
+		result.Index = segments[1]
+		result.IndexType = segments[2]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_mapping") && httpAction == "PUT" {
+		result.RequestAction = es.RequestActionUpdateIndexMapping
+		result.Index = segments[1]
+		result.IndexType = segments[2]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_settings") && httpAction == "GET" {
+		result.RequestAction = es.RequestActionGetIndexSettings
+		result.Index = segments[1]
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_settings") && httpAction == "PUT" {
+		result.RequestAction = es.RequestActionUpdateIndexSettings
+		result.Index = segments[1]
+		return &result, nil
+	}
+
+	if len(segments) == 4 {
+		if httpAction == "PUT" {
+			result.RequestAction = es.RequestActionUpsertDocument
+		} else if httpAction == "GET" {
+			result.RequestAction = es.RequestActionDocument
+		} else if httpAction == "DELETE" {
+			result.RequestAction = es.RequestActionDeleteDocument
+		}
+
+		result.Index = segments[1]
+		result.IndexType = segments[2]
+		result.DocumentId = segments[3]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
+		return &result, nil
+	}
+
+	if len(segments) == 3 && httpAction == "POST" {
+		result.RequestAction = es.RequestActionUpsertDocument
+		result.Index = segments[1]
+		result.IndexType = segments[2]
+		result.UriWithoutType = strings.Join(append(segments[:2], segments[3:]...), "/")
 		return &result, nil
 	}
 
 	if len(segments) == 2 {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionGetIndex
-		}
-
 		if httpAction == "PUT" {
 			result.RequestAction = es.RequestActionCreateIndex
-		}
-
-		if httpAction == "DELETE" {
+		} else if httpAction == "GET" {
+			result.RequestAction = es.RequestActionGetIndex
+		} else if httpAction == "DELETE" {
 			result.RequestAction = es.RequestActionDeleteIndex
 		}
 
@@ -227,37 +208,156 @@ func (gateway *ESGateway) parseUriPath(httpAction, uriPath string, esInstance es
 		return &result, nil
 	}
 
-	if len(segments) >= 3 {
-		if httpAction == "GET" {
-			result.RequestAction = es.RequestActionDocument
-		}
+	return nil, fmt.Errorf("invalid uri %s", uriPath)
+}
 
+func (gateway *ESGateway) parseNonTypeUriPath(httpAction, uriPath string) (*es.UriPathParserResult, error) {
+	var result es.UriPathParserResult
+	result.HttpAction = httpAction
+	result.IndexType = "_doc"
+	result.UriWithType = uriPath
+	result.UriWithoutType = uriPath
+
+	if uriPath == "/" && httpAction == "GET" {
+		result.RequestAction = es.RequestActionGetInfo
+		return &result, nil
+	}
+
+	segments := strings.Split(uriPath, "/")
+
+	if strings.HasSuffix("/_create", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionCreateDocument
+		result.Index = segments[1]
+		result.DocumentId = segments[2]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix("/_update", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionUpdateDocument
+		result.Index = segments[1]
+		result.DocumentId = segments[2]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix("/_search", uriPath) && httpAction == "GET" {
+		result.RequestAction = es.RequestActionSearch
+		result.Index = segments[1]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix("/_search", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionSearchLimit
+		result.Index = segments[1]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix("/_bulk", uriPath) && httpAction == "POST" {
+		result.RequestAction = es.RequestActionBulk
+		return &result, nil
+	}
+
+	if "/_cluster/health" == uriPath && httpAction == "GET" {
+		result.RequestAction = es.RequestActionClusterHealth
+		return &result, nil
+	}
+
+	if "/_cluster/settings" == uriPath && httpAction == "GET" {
+		result.RequestAction = es.RequestActionClusterSettings
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_mapping") && httpAction == "GET" {
+		result.RequestAction = es.RequestActionGetIndexMapping
+		result.Index = segments[1]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_mapping") && httpAction == "PUT" {
+		result.RequestAction = es.RequestActionUpdateIndexMapping
+		result.Index = segments[1]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_settings") && httpAction == "GET" {
+		result.RequestAction = es.RequestActionGetIndexSettings
+		result.Index = segments[1]
+		return &result, nil
+	}
+
+	if strings.HasSuffix(uriPath, "_settings") && httpAction == "PUT" {
+		result.RequestAction = es.RequestActionUpdateIndexSettings
+		result.Index = segments[1]
+		return &result, nil
+	}
+
+	if len(segments) == 4 {
 		if httpAction == "PUT" {
 			result.RequestAction = es.RequestActionUpsertDocument
-		}
-
-		if httpAction == "DELETE" {
+		} else if httpAction == "GET" {
+			result.RequestAction = es.RequestActionDocument
+		} else if httpAction == "DELETE" {
 			result.RequestAction = es.RequestActionDeleteDocument
 		}
 
 		result.Index = segments[1]
-		if len(segments) == 4 {
-			result.IndexType = segments[2]
-			result.DocumentId = segments[3]
-			if !needType {
-				result.Uri = strings.Join(append(segments[:2], segments[3:]...), "/")
-			}
-		} else if len(segments) == 3 {
-			result.DocumentId = segments[2]
-		}
+		result.DocumentId = segments[2]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
 		return &result, nil
 	}
-	return &result, fmt.Errorf("invalid uri %s", uriPath)
+
+	if len(segments) == 3 && httpAction == "POST" {
+		result.RequestAction = es.RequestActionUpsertDocument
+		result.Index = segments[1]
+		newSegments := utils.InsertSlice(segments, 2, result.IndexType)
+		result.UriWithType = strings.Join(newSegments, "/")
+		return &result, nil
+	}
+
+	if len(segments) == 2 {
+		if httpAction == "PUT" {
+			result.RequestAction = es.RequestActionCreateIndex
+		} else if httpAction == "GET" {
+			result.RequestAction = es.RequestActionGetIndex
+		} else if httpAction == "DELETE" {
+			result.RequestAction = es.RequestActionDeleteIndex
+		}
+
+		result.Index = segments[1]
+		return &result, nil
+	}
+
+	return nil, fmt.Errorf("invalid uri %s", uriPath)
+}
+
+func (gateway *ESGateway) parseUriPath(httpAction, uriPath string, esInstance es.ES) (*es.UriPathParserResult, error) {
+	clusterVersion := esInstance.GetClusterVersion()
+	if strings.HasPrefix(clusterVersion, "5.") || strings.HasPrefix(clusterVersion, "6.") {
+		return gateway.parseTypeUriPath(httpAction, uriPath)
+	}
+	return gateway.parseNonTypeUriPath(httpAction, uriPath)
 }
 
 func (gateway *ESGateway) onHandler(c *gin.Context) {
+	uriParserResult, err := gateway.parseUriPath(c.Request.Method, c.Request.URL.Path, gateway.SourceES)
+	if err != nil {
+		utils.GetLogger(c).Errorf("uri parser %+v", err)
+		return
+	}
+
 	utils.GoRecovery(c, func() {
-		uriParserResult, err := gateway.parseUriPath(c.Request.Method, c.Request.URL.Path, gateway.SlaveES)
 		if !lo.Contains([]string{es.RequestActionUpsertDocument, es.RequestActionCreateDocument,
 			es.RequestActionUpdateDocument, es.RequestActionDeleteDocument,
 			es.RequestActionBulk, es.RequestActionCreateIndex, es.RequestActionDeleteIndex,
@@ -269,9 +369,11 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 			return
 		}
 
-		if err := gateway.modifyMappings(c); err != nil {
-			utils.GetLogger(c).Errorf("modify mappings %+v", err)
-			return
+		if uriParserResult.RequestAction == es.RequestActionCreateIndex {
+			if err := gateway.modifyMappings(c); err != nil {
+				utils.GetLogger(c).Errorf("modify mappings %+v", err)
+				return
+			}
 		}
 
 		_, _, _, err = gateway.proxy(c, gateway.SlaveES, uriParserResult)
@@ -279,12 +381,6 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 			utils.GetLogger(c).Errorf("salve request %+v", err)
 		}
 	})
-
-	uriParserResult, err := gateway.parseUriPath(c.Request.Method, c.Request.URL.Path, gateway.MasterES)
-	if err != nil {
-		utils.GetLogger(c).Errorf("uri parser %+v", err)
-		return
-	}
 
 	header, body, statusCode, err := gateway.proxy(c, gateway.MasterES, uriParserResult)
 	// 将 header, body, statusCode 返回给客户端
@@ -394,13 +490,17 @@ func (gateway *ESGateway) proxy(c *gin.Context, esInstance es.ES, uriParserResul
 	addresses := esInstance.GetAddresses()
 	address := addresses[rand.Intn(len(addresses))]
 
+	httpAction := uriParserResult.HttpAction
+	if uriParserResult.RequestAction == es.RequestActionCreateDocument && uriParserResult.DocumentId == "" {
+		httpAction = "POST"
+	}
 	proxy, err := url.Parse(address)
 	if err != nil {
 		return nil, nil, 0, errors.WithStack(err)
 	}
 
-	proxyURL := proxy.ResolveReference(&url.URL{Path: uriParserResult.Uri})
-	req, err := http.NewRequest(c.Request.Method, proxyURL.String(), c.Request.Body)
+	proxyURL := proxy.ResolveReference(&url.URL{Path: uriParserResult.GetUri(esInstance)})
+	req, err := http.NewRequest(httpAction, proxyURL.String(), c.Request.Body)
 	if err != nil {
 		return nil, nil, 0, errors.WithStack(err)
 	}

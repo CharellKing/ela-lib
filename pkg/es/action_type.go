@@ -3,7 +3,7 @@ package es
 const (
 	RequestActionGetInfo = "get-info"
 
-	RequestActionDocument       = "get-document"
+	RequestActionGetDocument    = "get-document"
 	RequestActionUpsertDocument = "upsert-document"
 	RequestActionCreateDocument = "create-document"
 	RequestActionUpdateDocument = "update-document"
@@ -27,11 +27,9 @@ const (
 	RequestActionUpdateIndexSettings = "update-index-settings"
 )
 
-type UriPathParserResult struct {
-	HttpAction    string
-	RequestAction string
-	Index         string
-	IndexType     string
-	DocumentId    string
-	Uri           string
+func (res *UriPathParserResult) GetUri(esInstance ES) string {
+	if ClusterVersionGte7(esInstance) {
+		return res.UriWithoutType
+	}
+	return res.UriWithType
 }

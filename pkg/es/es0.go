@@ -82,6 +82,7 @@ type ES interface {
 	GetAddresses() []string
 
 	GetUser() string
+
 	GetPassword() string
 }
 
