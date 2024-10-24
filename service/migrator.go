@@ -489,6 +489,15 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 		return nil, errors.WithStack(m.err)
 	}
 
+	existed, err := m.TargetES.IndexExisted(m.IndexPair.TargetIndex)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if !existed {
+		return nil, utils.NewCustomError(utils.NonIndexExisted, "target index %s not existed", m.IndexPair.TargetIndex)
+	}
+
 	ctx, err := m.buildIndexPairContext()
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -766,6 +775,15 @@ func (diffResult *DiffResult) Percent() float64 {
 func (m *Migrator) Compare() (*DiffResult, error) {
 	if m.err != nil {
 		return nil, errors.WithStack(m.err)
+	}
+
+	existed, err := m.TargetES.IndexExisted(m.IndexPair.TargetIndex)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if !existed {
+		return nil, utils.NewCustomError(utils.NonIndexExisted, "target index %s not existed", m.IndexPair.TargetIndex)
 	}
 
 	diffResult, err := m.compare()

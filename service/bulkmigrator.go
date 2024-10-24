@@ -577,6 +577,17 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 	var diffMap sync.Map
 	newBulkMigrator.parallelRun(func(migrator *Migrator) {
 		diffResult, err := migrator.SyncDiff()
+		if utils.IsCustomError(err, utils.NonIndexExisted) {
+			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), &DiffResult{
+				SameCount:   *utils.ZeroAtomicUint64(),
+				CreateCount: *utils.MaxAtomicUint64(),
+				UpdateCount: *utils.ZeroAtomicUint64(),
+				DeleteCount: *utils.ZeroAtomicUint64(),
+			})
+			utils.GetLogger(migrator.GetCtx()).Warn("target has no index")
+			return
+		}
+
 		if err != nil {
 			utils.GetLogger(migrator.GetCtx()).Errorf("syncDiff %+v", err)
 			return
@@ -608,8 +619,19 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 
 	newBulkMigrator.parallelRun(func(migrator *Migrator) {
 		diffResult, err := migrator.Compare()
+		if utils.IsCustomError(err, utils.NonIndexExisted) {
+			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), &DiffResult{
+				SameCount:   *utils.ZeroAtomicUint64(),
+				CreateCount: *utils.MaxAtomicUint64(),
+				UpdateCount: *utils.ZeroAtomicUint64(),
+				DeleteCount: *utils.ZeroAtomicUint64(),
+			})
+			utils.GetLogger(migrator.GetCtx()).Warn("target has no index")
+			return
+		}
+
 		if err != nil {
-			utils.GetLogger(newBulkMigrator.GetCtx()).Errorf("compare %+v", err)
+			utils.GetLogger(migrator.GetCtx()).Errorf("compare %+v", err)
 			return
 		}
 		if diffResult.HasDiff() {

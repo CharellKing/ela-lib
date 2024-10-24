@@ -58,3 +58,35 @@ func (e *Errs) As(target interface{}) bool {
 	}
 	return false
 }
+
+type ErrCode int
+
+type CustomError struct {
+	Code    ErrCode
+	Message string
+}
+
+// Error implements the error interface for CustomError.
+func (e *CustomError) Error() string {
+	return fmt.Sprintf("Error %d: %s", e.Code, e.Message)
+}
+
+const (
+	NonIndexExisted ErrCode = 1000
+)
+
+// NewCustomError creates a new CustomError with the given code and message.
+func NewCustomError(code ErrCode, format string, args ...any) error {
+	return &CustomError{
+		Code:    code,
+		Message: fmt.Sprintf(format, args...),
+	}
+}
+
+func IsCustomError(err error, code ErrCode) bool {
+	var customErr *CustomError
+	if errors.As(err, &customErr) {
+		return customErr.Code == code
+	}
+	return false
+}
