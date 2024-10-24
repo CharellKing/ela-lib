@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"github.com/CharellKing/ela-lib/config"
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
 	"io"
 	"net/http"
@@ -20,6 +21,15 @@ const (
 	OperationCreate Operation = iota
 	OperationUpdate
 	OperationDelete
+)
+
+type MethodType string
+
+const (
+	MethodPost   MethodType = "POST"
+	MethodPut    MethodType = "PUT"
+	MethodGet    MethodType = "GET"
+	MethodDelete MethodType = "DELETE"
 )
 
 type ScrollResult struct {
@@ -84,6 +94,20 @@ type ES interface {
 	GetUser() string
 
 	GetPassword() string
+
+	MatchRule(c *gin.Context) *UriPathParserResult
+
+	MakeUri(uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error)
+
+	GetSearchResponse(bodyMap map[string]interface{}) map[string]interface{}
+
+	GetActionRuleMap() map[RequestActionType]*UriParserRule
+
+	GetMethodRuleMap() map[MethodType][]*MatchRule
+
+	IsWrite(requestActionType RequestActionType) bool
+
+	Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, error)
 }
 
 type V0 struct {

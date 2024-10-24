@@ -25,11 +25,7 @@ import (
 
 type V8 struct {
 	*elasticsearch8.Client
-	ClusterVersion string
-	Settings       IESSettings
-	Addresses      []string
-	User           string
-	Password       string
+	*BaseES
 }
 
 func NewESV8(esConfig *config.ESConfig, clusterVersion string) (*V8, error) {
@@ -51,11 +47,8 @@ func NewESV8(esConfig *config.ESConfig, clusterVersion string) (*V8, error) {
 	}
 
 	return &V8{
-		Client:         client,
-		ClusterVersion: clusterVersion,
-		Addresses:      esConfig.Addresses,
-		User:           esConfig.User,
-		Password:       esConfig.Password,
+		Client: client,
+		BaseES: NewBaseES(clusterVersion, esConfig.Addresses, esConfig.User, esConfig.Password),
 	}, nil
 }
 

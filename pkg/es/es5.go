@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/CharellKing/ela-lib/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/mitchellh/mapstructure"
 	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
@@ -26,11 +27,7 @@ import (
 
 type V5 struct {
 	*elasticsearch5.Client
-	ClusterVersion string
-	Settings       IESSettings
-	Addresses      []string
-	User           string
-	Password       string
+	*BaseES
 }
 
 func NewESV5(esConfig *config.ESConfig, clusterVersion string) (*V5, error) {
@@ -51,11 +48,8 @@ func NewESV5(esConfig *config.ESConfig, clusterVersion string) (*V5, error) {
 	}
 
 	return &V5{
-		Client:         client,
-		ClusterVersion: clusterVersion,
-		Addresses:      esConfig.Addresses,
-		User:           esConfig.User,
-		Password:       esConfig.Password,
+		Client: client,
+		BaseES: NewBaseES(clusterVersion, esConfig.Addresses, esConfig.User, esConfig.Password),
 	}, nil
 }
 
@@ -581,14 +575,17 @@ func (es *V5) GetInfo(ctx context.Context) (map[string]interface{}, error) {
 	return clusterHealthResp, nil
 }
 
-func (es *V5) GetAddresses() []string {
-	return es.Addresses
-}
-
-func (es *V5) GetUser() string {
-	return es.User
-}
-
-func (es *V5) GetPassword() string {
-	return es.Password
+func (es *V5) ParseRequest(c *gin.Context) {
+	//uri := c.Request.RequestURI
+	//method := c.Request.Method
+	//
+	//rules := es.MethodRuleMap[MethodType(method)]
+	//for _, rule := range rules {
+	//	if regexp.MatchString rule.MatchRules.UriPattern {
+	//		rule.ParseRequest(c)
+	//		return
+	//	}
+	//}
+	//uriParser := NewUriParser(uri, method, es.ActionRuleMap, es.MethodRuleMap)
+	//uriParser.ParseRequest(c)
 }

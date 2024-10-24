@@ -25,11 +25,7 @@ import (
 
 type V7 struct {
 	*elasticsearch7.Client
-	ClusterVersion string
-	Settings       IESSettings
-	Addresses      []string
-	User           string
-	Password       string
+	*BaseES
 }
 
 func NewESV7(esConfig *config.ESConfig, clusterVersion string) (*V7, error) {
@@ -51,11 +47,8 @@ func NewESV7(esConfig *config.ESConfig, clusterVersion string) (*V7, error) {
 	}
 
 	return &V7{
-		Client:         client,
-		ClusterVersion: clusterVersion,
-		Addresses:      esConfig.Addresses,
-		User:           esConfig.User,
-		Password:       esConfig.Password,
+		Client: client,
+		BaseES: NewBaseES(clusterVersion, esConfig.Addresses, esConfig.User, esConfig.Password),
 	}, nil
 }
 

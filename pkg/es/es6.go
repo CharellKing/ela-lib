@@ -24,11 +24,7 @@ import (
 
 type V6 struct {
 	*elasticsearch6.Client
-	ClusterVersion string
-	Settings       IESSettings
-	Addresses      []string
-	User           string
-	Password       string
+	*BaseES
 }
 
 func NewESV6(esConfig *config.ESConfig, clusterVersion string) (*V6, error) {
@@ -50,11 +46,8 @@ func NewESV6(esConfig *config.ESConfig, clusterVersion string) (*V6, error) {
 	}
 
 	return &V6{
-		Client:         client,
-		ClusterVersion: clusterVersion,
-		Addresses:      esConfig.Addresses,
-		User:           esConfig.User,
-		Password:       esConfig.Password,
+		Client: client,
+		BaseES: NewBaseES(clusterVersion, esConfig.Addresses, esConfig.User, esConfig.Password),
 	}, nil
 }
 

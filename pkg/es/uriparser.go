@@ -2,42 +2,55 @@ package es
 
 type UriPathParserResult struct {
 	RequestAction RequestActionType
-	Index         string
-	IndexType     string
-	DocumentId    string
+	VariableMap   map[string]string
+}
+
+type UriPathMakeResult struct {
+	Uri      string
+	Method   MethodType
+	Address  string
+	User     string
+	Password string
 }
 
 type MatchRule struct {
-	Method     string
+	Method     MethodType
 	UriPattern string
 	Priority   int
+
+	RequestActionType RequestActionType
 }
 
-type ComposeRule struct {
-	Method     string
-	UriPattern string
+func newMatchRule(method MethodType, uriPattern string, priority int) *MatchRule {
+	return &MatchRule{
+		Method:     MethodType(method),
+		UriPattern: uriPattern,
+		Priority:   priority,
+	}
 }
 
 type UriParserRule struct {
-	RequestAction RequestActionType
-	MatchRule     MatchRule
-	ComposeRule   ComposeRule
-	IsWrite       bool
+	MatchRules []*MatchRule
+	IsWrite    bool
 }
 
 type RequestActionType string
 
 const (
-	RequestActionTypeUpsertDocument          RequestActionType = "upsertDocument"
-	RequestActionTypeCreateDocument          RequestActionType = "createDocument"
-	RequestActionTypeCreateDocumentWithID                      = "createDocumentWithID"
+	RequestActionTypeUpsertDocument       RequestActionType = "upsertDocument"
+	RequestActionTypeCreateDocument       RequestActionType = "createDocument"
+	RequestActionTypeCreateDocumentWithID RequestActionType = "createDocumentWithID"
+	RequestActionTypeDeleteDocument       RequestActionType = "deleteDocument"
+	RequestActionTypeUpdateDocument       RequestActionType = "updateDocument"
+
+	RequestActionTypeDeleteByQuery RequestActionType = "deleteByQuery"
+	RequestActionTypeUpdateByQuery RequestActionType = "updateByQuery"
+
+	RequestActionTypeBulkDocument RequestActionType = "bulkDocument"
+
 	RequestActionTypeGetDocument             RequestActionType = "getDocument"
-	RequestActionTypeDeleteDocument          RequestActionType = "deleteDocument"
-	RequestActionTypeDeleteByQuery           RequestActionType = "deleteByQuery"
-	RequestActionTypeUpdateDocument          RequestActionType = "updateDocument"
-	RequestActionTypeUpdateByQuery           RequestActionType = "updateByQuery"
+	RequestActionTypeGetDocumentOnlySource   RequestActionType = "getDocumentOnlySource"
 	RequestActionTypeMGetDocument            RequestActionType = "mgetDocument"
-	RequestActionTypeBulkDocument            RequestActionType = "bulkDocument"
 	RequestActionTypeSearchDocument          RequestActionType = "searchDocument"
 	RequestActionTypeSearchDocumentWithLimit RequestActionType = "searchDocumentWithLimit"
 )

@@ -26,10 +26,3 @@ const (
 	RequestActionGetIndexSettings    = "get-index-settings"
 	RequestActionUpdateIndexSettings = "update-index-settings"
 )
-
-func (res *UriPathParserResult) GetUri(esInstance ES) string {
-	if ClusterVersionGte7(esInstance) {
-		return res.UriWithoutType
-	}
-	return res.UriWithType
-}
