@@ -107,7 +107,7 @@ type ES interface {
 
 	IsWrite(requestActionType RequestActionType) bool
 
-	Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, error)
+	Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error)
 }
 
 type V0 struct {

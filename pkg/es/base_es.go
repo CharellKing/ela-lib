@@ -231,15 +231,16 @@ func (es *BaseES) MakeUri(uriPathParserResult *UriPathParserResult) (*UriPathMak
 		isOk := true
 		for _, patternSegment := range patternSegments {
 			if strings.HasPrefix(patternSegment, "${") {
-				variable := strings.Trim(patternSegment, "${}")
+				variable := strings.Trim(patternSegment, "${}?")
 				value, ok := uriPathParserResult.VariableMap[variable]
 				if !ok {
 					if !strings.HasSuffix(patternSegment, "?") {
 						isOk = false
 						break
 					}
+				} else {
+					uriSegments = append(uriSegments, value)
 				}
-				uriSegments = append(uriSegments, value)
 			} else {
 				uriSegments = append(uriSegments, patternSegment)
 			}
@@ -293,27 +294,30 @@ func (es *BaseES) IsWrite(requestActionType RequestActionType) bool {
 	return actionRule.IsWrite
 }
 
-func (es *BaseES) Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, error) {
+func (es *BaseES) Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error) {
 	makeUriResult, err := es.MakeUri(parserUriResult)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}
 
 	targetUrl := fmt.Sprintf("%s%s", makeUriResult.Address, makeUriResult.Uri)
 
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	req, err := http.NewRequest(string(makeUriResult.Method), targetUrl, io.NopCloser(bytes.NewBuffer(bodyBytes)))
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}
 
 	req.SetBasicAuth(makeUriResult.User, makeUriResult.Password)
 	for k, v := range c.Request.Header {
+		if k == "Accept-Encoding" {
+			continue
+		}
 		req.Header.Set(k, v[0])
 	}
 
@@ -331,31 +335,28 @@ func (es *BaseES) Request(c *gin.Context, parserUriResult *UriPathParserResult) 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
 	}()
 
 	if resp.StatusCode > 299 {
-		return nil, es.formatError(resp)
+		return es.formatResponse(resp)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
+	bodyMap, statusCode, _ := es.formatResponse(resp)
 
-	bodyMap := make(map[string]interface{})
-	err = json.Unmarshal(body, &bodyMap)
-	if err != nil {
-		return nil, errors.WithStack(err)
+	if parserUriResult.RequestAction == RequestActionTypeSearchDocumentWithLimit ||
+		parserUriResult.RequestAction == RequestActionTypeSearchDocument {
+		bodyMap = es.GetSearchResponse(bodyMap)
 	}
-	return bodyMap, nil
+	return bodyMap, statusCode, nil
 }
 
-func (es *BaseES) formatError(resp *http.Response) error {
-	statusStr := resp.Status
-	bodyStr, _ := io.ReadAll(resp.Body)
-	return errors.Errorf("status: %s, body: %s", statusStr, bodyStr)
+func (es *BaseES) formatResponse(resp *http.Response) (map[string]interface{}, int, error) {
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyMap := make(map[string]interface{})
+	_ = json.Unmarshal(bodyBytes, &bodyMap)
+	return bodyMap, resp.StatusCode, nil
 }

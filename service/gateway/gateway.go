@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/CharellKing/ela-lib/pkg/es"
 	"github.com/CharellKing/ela-lib/utils"
@@ -89,10 +90,16 @@ func (gateway *ESGateway) convertSlaveMatchRule(masterResponse map[string]interf
 
 func (gateway *ESGateway) onHandler(c *gin.Context) {
 	parseUriResult := gateway.SourceES.MatchRule(c)
-	resp, err := gateway.MasterES.Request(c, parseUriResult)
+	if parseUriResult == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("invalid uri %s", c.Request.URL.Path),
+		})
+		return
+	}
+	resp, statusCode, err := gateway.MasterES.Request(c, parseUriResult)
 	if err != nil {
 		utils.GetLogger(c).Infof("master request error: %+v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(statusCode, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -100,13 +107,14 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 	if gateway.SlaveES.IsWrite(parseUriResult.RequestAction) {
 		utils.GoRecovery(c, func() {
 			newParseUriResult := gateway.convertSlaveMatchRule(resp, parseUriResult)
-			_, err = gateway.SlaveES.Request(c, newParseUriResult)
+			_, _, err = gateway.SlaveES.Request(c, newParseUriResult)
 			if err != nil {
 				utils.GetLogger(c).Infof("slave request error: %+v", err)
 			}
 		})
 	}
-	c.JSON(http.StatusOK, resp)
+
+	c.JSON(statusCode, resp)
 }
 
 func (gateway *ESGateway) onRequest() {
