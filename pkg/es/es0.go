@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"github.com/CharellKing/ela-lib/config"
+	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"strings"
@@ -19,6 +20,15 @@ const (
 	OperationCreate Operation = iota
 	OperationUpdate
 	OperationDelete
+)
+
+type MethodType string
+
+const (
+	MethodPost   MethodType = "POST"
+	MethodPut    MethodType = "PUT"
+	MethodGet    MethodType = "GET"
+	MethodDelete MethodType = "DELETE"
 )
 
 type ScrollResult struct {
@@ -52,6 +62,7 @@ type ScrollOption struct {
 	SliceId    *uint
 	SliceSize  *uint
 }
+
 type ES interface {
 	GetClusterVersion() string
 	IndexExisted(index string) (bool, error)
@@ -72,6 +83,32 @@ type ES interface {
 	Count(ctx context.Context, index string) (uint64, error)
 
 	CreateTemplate(ctx context.Context, name string, body map[string]interface{}) error
+
+	ClusterHealth(ctx context.Context) (map[string]interface{}, error)
+
+	GetInfo(ctx context.Context) (map[string]interface{}, error)
+
+	GetAddresses() []string
+
+	GetUser() string
+
+	GetPassword() string
+
+	MatchRule(c *gin.Context) *UriPathParserResult
+
+	MakeUri(uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error)
+
+	GetSearchResponse(bodyMap map[string]interface{}) map[string]interface{}
+
+	GetActionRuleMap() map[RequestActionType]*UriParserRule
+
+	GetMethodRuleMap() map[MethodType][]*MatchRule
+
+	IsWrite(requestActionType RequestActionType) bool
+
+	Request(c *gin.Context, bodyBytes []byte, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error)
+
+	ClusterVersionGte7() bool
 }
 
 type V0 struct {

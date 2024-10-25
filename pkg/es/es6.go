@@ -24,8 +24,7 @@ import (
 
 type V6 struct {
 	*elasticsearch6.Client
-	ClusterVersion string
-	Settings       IESSettings
+	*BaseES
 }
 
 func NewESV6(esConfig *config.ESConfig, clusterVersion string) (*V6, error) {
@@ -47,8 +46,8 @@ func NewESV6(esConfig *config.ESConfig, clusterVersion string) (*V6, error) {
 	}
 
 	return &V6{
-		Client:         client,
-		ClusterVersion: clusterVersion,
+		Client: client,
+		BaseES: NewBaseES(clusterVersion, esConfig.Addresses, esConfig.User, esConfig.Password),
 	}, nil
 }
 
@@ -452,13 +451,70 @@ func (es *V6) CreateTemplate(ctx context.Context, name string, body map[string]i
 		return errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+	return nil
+}
+
+func (es *V6) ClusterHealth(ctx context.Context) (map[string]interface{}, error) {
+	// Get Cluster Health
+	res, err := es.Client.Cluster.Health()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
 
-	if res.IsError() {
-		return errors.New(res.String())
+	var clusterHealthResp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&clusterHealthResp); err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	return nil
+	return clusterHealthResp, nil
+}
+
+func (es *V6) GetInfo(ctx context.Context) (map[string]interface{}, error) {
+	// Get Cluster Health
+	res, err := es.Client.Cluster.GetSettings()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	var clusterHealthResp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&clusterHealthResp); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return clusterHealthResp, nil
+}
+
+func (es *V6) GetAddresses() []string {
+	return es.Addresses
+}
+
+func (es *V6) GetUser() string {
+	return es.User
+}
+
+func (es *V6) GetPassword() string {
+	return es.Password
 }

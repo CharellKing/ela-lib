@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/CharellKing/ela-lib/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/mitchellh/mapstructure"
 	lop "github.com/samber/lo/parallel"
 	"github.com/spf13/cast"
@@ -26,8 +27,7 @@ import (
 
 type V5 struct {
 	*elasticsearch5.Client
-	ClusterVersion string
-	Settings       IESSettings
+	*BaseES
 }
 
 func NewESV5(esConfig *config.ESConfig, clusterVersion string) (*V5, error) {
@@ -48,8 +48,8 @@ func NewESV5(esConfig *config.ESConfig, clusterVersion string) (*V5, error) {
 	}
 
 	return &V5{
-		Client:         client,
-		ClusterVersion: clusterVersion,
+		Client: client,
+		BaseES: NewBaseES(clusterVersion, esConfig.Addresses, esConfig.User, esConfig.Password),
 	}, nil
 }
 
@@ -501,13 +501,91 @@ func (es *V5) CreateTemplate(ctx context.Context, name string, body map[string]i
 		return errors.WithStack(err)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return formatError(res)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+	return nil
+}
+
+type ClusterHealthRespV5 struct {
+	ActivePrimaryShards         int     `json:"active_primary_shards"`
+	ActiveShards                int     `json:"active_shards"`
+	ActiveShardsPercentAsNumber float64 `json:"active_shards_percent_as_number"`
+	ClusterName                 string  `json:"cluster_name"`
+	DelayedUnassignedShards     int     `json:"delayed_unassigned_shards"`
+	InitializingShards          int     `json:"initializing_shards"`
+	NumberOfDataNodes           int     `json:"number_of_data_nodes"`
+	NumberOfInFlightFetch       int     `json:"number_of_in_flight_fetch"`
+	NumberOfNodes               int     `json:"number_of_nodes"`
+	NumberOfPendingTasks        int     `json:"number_of_pending_tasks"`
+	RelocatingShards            int     `json:"relocating_shards"`
+	Status                      string  `json:"status"`
+	TaskMaxWaitingInQueueMillis int     `json:"task_max_waiting_in_queue_millis"`
+	TimedOut                    bool    `json:"timed_out"`
+	UnassignedShards            int     `json:"unassigned_shards"`
+}
+
+func (es *V5) ClusterHealth(ctx context.Context) (map[string]interface{}, error) {
+	// Get Cluster Health
+	res, err := es.Client.Cluster.Health()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
 	defer func() {
 		_ = res.Body.Close()
 	}()
 
-	if res.IsError() {
-		return errors.New(res.String())
+	var clusterHealthResp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&clusterHealthResp); err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	return nil
+	return clusterHealthResp, nil
+}
+
+func (es *V5) GetInfo(ctx context.Context) (map[string]interface{}, error) {
+	// Get Cluster Health
+	res, err := es.Client.Info()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatError(res)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	var clusterHealthResp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&clusterHealthResp); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return clusterHealthResp, nil
+}
+
+func (es *V5) ParseRequest(c *gin.Context) {
+	//uri := c.Request.RequestURI
+	//method := c.Request.Method
+	//
+	//rules := es.MethodRuleMap[MethodType(method)]
+	//for _, rule := range rules {
+	//	if regexp.MatchString rule.MatchRules.UriPattern {
+	//		rule.ParseRequest(c)
+	//		return
+	//	}
+	//}
+	//uriParser := NewUriParser(uri, method, es.ActionRuleMap, es.MethodRuleMap)
+	//uriParser.ParseRequest(c)
 }
