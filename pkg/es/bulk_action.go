@@ -137,6 +137,26 @@ func adjustBulkRequest(bulkRequestList []*BulkRequestItem, bulkResponseList []*B
 	return newBulkRequestList, nil
 }
 
+func AdjustBulkRequestBodyWithOnlyDocType(requestBody []byte, reservationType DocTypeReservationType) ([]byte, error) {
+	if reservationType == DocTypeReservationTypeKeep {
+		return requestBody, nil
+	}
+
+	bulkRequestItems, err := parseRequest(requestBody, reservationType)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var newBulkRequestItemStringArray []string
+	for _, bulkRequestItem := range bulkRequestItems {
+		newBulkRequestItemStringArray = append(newBulkRequestItemStringArray, bulkRequestItem.ToStringArray()...)
+	}
+
+	newBulkRequestItemStringArray = append(newBulkRequestItemStringArray, "")
+	newBulkRequestBodyString := strings.Join(newBulkRequestItemStringArray, "\n")
+	return []byte(newBulkRequestBodyString), nil
+}
+
 func AdjustBulkRequestBody(requestBody []byte, responseBody map[string]interface{}, reservationType DocTypeReservationType) ([]byte, error) {
 	bulkRequestItems, err := parseRequest(requestBody, reservationType)
 	if err != nil {

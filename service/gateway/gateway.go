@@ -114,16 +114,34 @@ func (bulkAction *BulkAction) ToStringArray() []string {
 	return bulkActionArray
 }
 
+func (gateway *ESGateway) convertMasterRequestBody(masterRequestBody []byte, parserResult *es.UriPathParserResult) ([]byte, error) {
+	var err error
+	requestBody := masterRequestBody
+	if parserResult.RequestAction == es.RequestActionTypeBulkDocument {
+		var docTypeReservationType = es.DocTypeReservationTypeKeep
+		if gateway.MasterES.ClusterVersionGte7() == true && gateway.SourceES.ClusterVersionGte7() == false {
+			docTypeReservationType = es.DocTypeReservationTypeDelete
+		} else if gateway.MasterES.ClusterVersionGte7() == false && gateway.SourceES.ClusterVersionGte7() == true {
+			docTypeReservationType = es.DocTypeReservationTypeCreate
+		}
+		requestBody, err = es.AdjustBulkRequestBodyWithOnlyDocType(masterRequestBody, docTypeReservationType)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return requestBody, nil
+}
+
 func (gateway *ESGateway) convertSalveRequestBody(masterRequestBody []byte,
 	masterResponse map[string]interface{}, parserResult *es.UriPathParserResult) ([]byte, error) {
 	var err error
 	requestBody := masterRequestBody
 	if parserResult.RequestAction == es.RequestActionTypeBulkDocument {
-		var docTypeReservationType es.DocTypeReservationType = es.DocTypeReservationTypeKeep
-		if gateway.MasterES.ClusterVersionGte7() == true && gateway.SlaveES.ClusterVersionGte7() == false {
-			docTypeReservationType = es.DocTypeReservationTypeCreate
-		} else if gateway.MasterES.ClusterVersionGte7() == false && gateway.SlaveES.ClusterVersionGte7() == true {
+		var docTypeReservationType = es.DocTypeReservationTypeKeep
+		if gateway.SlaveES.ClusterVersionGte7() == true && gateway.SourceES.ClusterVersionGte7() == false {
 			docTypeReservationType = es.DocTypeReservationTypeDelete
+		} else if gateway.SlaveES.ClusterVersionGte7() == false && gateway.SourceES.ClusterVersionGte7() == true {
+			docTypeReservationType = es.DocTypeReservationTypeCreate
 		}
 		requestBody, err = es.AdjustBulkRequestBody(masterRequestBody, masterResponse, docTypeReservationType)
 		if err != nil {
@@ -150,7 +168,15 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 		})
 		return
 	}
-	resp, statusCode, err := gateway.MasterES.Request(c, bodyBytes, parseUriResult)
+
+	newBodyBytes, err := gateway.convertMasterRequestBody(bodyBytes, parseUriResult)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	resp, statusCode, err := gateway.MasterES.Request(c, newBodyBytes, parseUriResult)
 	if err != nil {
 		utils.GetLogger(c).Infof("master request error: %+v", err)
 		c.JSON(statusCode, gin.H{
@@ -160,13 +186,13 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 	}
 	if gateway.SlaveES.IsWrite(parseUriResult.RequestAction) && statusCode < 300 {
 		utils.GoRecovery(c, func() {
-			bodyBytes, err := gateway.convertSalveRequestBody(bodyBytes, resp, parseUriResult)
+			newBodyBytes, err := gateway.convertSalveRequestBody(bodyBytes, resp, parseUriResult)
 			if err != nil {
 				utils.GetLogger(c).Errorf("convert slave request body: %+v", err)
 				return
 			}
 			newParseUriResult := gateway.convertSlaveMatchRule(resp, parseUriResult)
-			response, status, err := gateway.SlaveES.Request(c, bodyBytes, newParseUriResult)
+			response, status, err := gateway.SlaveES.Request(c, newBodyBytes, newParseUriResult)
 			if err != nil {
 				utils.GetLogger(c).Errorf("slave request error: %+v", err)
 			}

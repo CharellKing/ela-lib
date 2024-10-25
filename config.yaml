@@ -162,4 +162,4 @@ gateway:
   gateway_password: "12342"
   source_es: es5
   target_es: es8
-  master: es5
+  master: es8

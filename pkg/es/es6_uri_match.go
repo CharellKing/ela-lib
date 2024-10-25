@@ -40,7 +40,7 @@ func getUriParserRuleMapWithRequestActionForV6() map[RequestActionType]*UriParse
 		},
 		RequestActionTypeDeleteByQuery: {
 			[]*MatchRule{
-				newMatchRule(MethodPost, "/${index}/${docType}/_delete_by_query", 1),
+				newMatchRule(MethodPost, "/${index}/_delete_by_query", 1),
 			},
 			true,
 		},
