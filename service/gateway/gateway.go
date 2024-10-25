@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/CharellKing/ela-lib/pkg/es"
@@ -9,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/cast"
+	"io"
 	"net/http"
 )
 
@@ -88,7 +91,58 @@ func (gateway *ESGateway) convertSlaveMatchRule(masterResponse map[string]interf
 	return parseResult
 }
 
+type BulkAction struct {
+	ActionType string
+	Metadata   map[string]interface{}
+	Document   map[string]interface{}
+}
+
+func (bulkAction *BulkAction) ToStringArray() []string {
+	metadataMap := map[string]interface{}{
+		bulkAction.ActionType: bulkAction.Metadata,
+	}
+
+	var bulkActionArray []string
+	metadataBytes, _ := json.Marshal(metadataMap)
+	bulkActionArray = append(bulkActionArray, string(metadataBytes))
+
+	if bulkAction.Document != nil {
+		documentBytes, _ := json.Marshal(bulkAction.Document)
+		bulkActionArray = append(bulkActionArray, string(documentBytes))
+	}
+
+	return bulkActionArray
+}
+
+func (gateway *ESGateway) convertSalveRequestBody(masterRequestBody []byte,
+	masterResponse map[string]interface{}, parserResult *es.UriPathParserResult) ([]byte, error) {
+	var err error
+	requestBody := masterRequestBody
+	if parserResult.RequestAction == es.RequestActionTypeBulkDocument {
+		var docTypeReservationType es.DocTypeReservationType = es.DocTypeReservationTypeKeep
+		if gateway.MasterES.ClusterVersionGte7() == true && gateway.SlaveES.ClusterVersionGte7() == false {
+			docTypeReservationType = es.DocTypeReservationTypeCreate
+		} else if gateway.MasterES.ClusterVersionGte7() == false && gateway.SlaveES.ClusterVersionGte7() == true {
+			docTypeReservationType = es.DocTypeReservationTypeDelete
+		}
+		requestBody, err = es.AdjustBulkRequestBody(masterRequestBody, masterResponse, docTypeReservationType)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return requestBody, nil
+}
+
 func (gateway *ESGateway) onHandler(c *gin.Context) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	parseUriResult := gateway.SourceES.MatchRule(c)
 	if parseUriResult == nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -96,7 +150,7 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 		})
 		return
 	}
-	resp, statusCode, err := gateway.MasterES.Request(c, parseUriResult)
+	resp, statusCode, err := gateway.MasterES.Request(c, bodyBytes, parseUriResult)
 	if err != nil {
 		utils.GetLogger(c).Infof("master request error: %+v", err)
 		c.JSON(statusCode, gin.H{
@@ -104,12 +158,21 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 		})
 		return
 	}
-	if gateway.SlaveES.IsWrite(parseUriResult.RequestAction) {
+	if gateway.SlaveES.IsWrite(parseUriResult.RequestAction) && statusCode < 300 {
 		utils.GoRecovery(c, func() {
-			newParseUriResult := gateway.convertSlaveMatchRule(resp, parseUriResult)
-			_, _, err = gateway.SlaveES.Request(c, newParseUriResult)
+			bodyBytes, err := gateway.convertSalveRequestBody(bodyBytes, resp, parseUriResult)
 			if err != nil {
-				utils.GetLogger(c).Infof("slave request error: %+v", err)
+				utils.GetLogger(c).Errorf("convert slave request body: %+v", err)
+				return
+			}
+			newParseUriResult := gateway.convertSlaveMatchRule(resp, parseUriResult)
+			response, status, err := gateway.SlaveES.Request(c, bodyBytes, newParseUriResult)
+			if err != nil {
+				utils.GetLogger(c).Errorf("slave request error: %+v", err)
+			}
+
+			if status >= 299 {
+				utils.GetLogger(c).Errorf("response: %+v, err: %+v", response, err)
 			}
 		})
 	}

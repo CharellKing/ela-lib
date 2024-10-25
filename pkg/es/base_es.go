@@ -201,7 +201,9 @@ func (es *BaseES) MatchRule(c *gin.Context) *UriPathParserResult {
 		variableMap, ok := es.matchRule(c.Request.URL.Path, matchRule.UriPattern)
 		if ok {
 			if es.ClusterVersionGte7() {
-				variableMap["docType"] = "_doc"
+				if _, ok := variableMap["index"]; ok {
+					variableMap["docType"] = "_doc"
+				}
 			}
 			return &UriPathParserResult{
 				VariableMap:   variableMap,
@@ -294,19 +296,13 @@ func (es *BaseES) IsWrite(requestActionType RequestActionType) bool {
 	return actionRule.IsWrite
 }
 
-func (es *BaseES) Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error) {
+func (es *BaseES) Request(c *gin.Context, bodyBytes []byte, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error) {
 	makeUriResult, err := es.MakeUri(parserUriResult)
 	if err != nil {
 		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}
 
 	targetUrl := fmt.Sprintf("%s%s", makeUriResult.Address, makeUriResult.Uri)
-
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		return nil, http.StatusInternalServerError, errors.WithStack(err)
-	}
-	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	req, err := http.NewRequest(string(makeUriResult.Method), targetUrl, io.NopCloser(bytes.NewBuffer(bodyBytes)))
 	if err != nil {
@@ -318,6 +314,7 @@ func (es *BaseES) Request(c *gin.Context, parserUriResult *UriPathParserResult) 
 		if k == "Accept-Encoding" {
 			continue
 		}
+
 		req.Header.Set(k, v[0])
 	}
 

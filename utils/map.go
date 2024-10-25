@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/samber/lo"
+	"github.com/spf13/cast"
 	"strings"
 )
 
@@ -42,4 +43,11 @@ func SetValueFromMapByPath(data map[string]interface{}, path string, value inter
 		}
 	}
 	return false
+}
+
+func GetFirstKeyMapValue(m map[string]interface{}) (string, map[string]interface{}) {
+	for k, v := range m {
+		return k, cast.ToStringMap(v)
+	}
+	return "", nil
 }

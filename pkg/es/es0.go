@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/cast"
 	"io"
 	"net/http"
 	"strings"
@@ -107,7 +106,9 @@ type ES interface {
 
 	IsWrite(requestActionType RequestActionType) bool
 
-	Request(c *gin.Context, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error)
+	Request(c *gin.Context, bodyBytes []byte, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error)
+
+	ClusterVersionGte7() bool
 }
 
 type V0 struct {
@@ -208,10 +209,4 @@ func formatError(res IResponse) error {
 	statusStr := res.Status()
 	bodyStr := res.String()
 	return errors.Errorf("status: %s, body: %s", statusStr, bodyStr)
-}
-
-func ClusterVersionGte7(es ES) bool {
-	clusterVersion := es.GetClusterVersion()
-	segments := strings.Split(clusterVersion, ".")
-	return cast.ToInt(segments[0]) >= 7
 }

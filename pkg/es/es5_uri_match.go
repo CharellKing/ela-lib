@@ -64,7 +64,7 @@ func getUriParserRuleMapWithRequestActionForV5() map[RequestActionType]*UriParse
 		},
 		RequestActionTypeBulkDocument: {
 			[]*MatchRule{
-				newMatchRule(MethodPost, "/${index}?/_bulk", 1),
+				newMatchRule(MethodPost, "/${index}?/${docType}?/_bulk", 1),
 			},
 			true,
 		},
