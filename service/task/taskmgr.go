@@ -44,10 +44,13 @@ func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
 	}, nil
 }
 
-func (t *TaskMgr) Run(ctx context.Context) error {
+func (t *TaskMgr) Run(ctx context.Context, taskNames ...string) error {
 	ctx = utils.SetCtxKeyIgnoreSystemIndex(ctx, t.ignoreSystemIndex)
 
 	for idx, taskCfg := range t.taskCfgs {
+		if len(taskNames) > 0 && !lo.Contains(taskNames, taskCfg.Name) {
+			continue
+		}
 		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES])
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
