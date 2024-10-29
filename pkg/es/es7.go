@@ -116,7 +116,7 @@ func (es *V7) NewScroll(ctx context.Context, index string, option *ScrollOption)
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -147,7 +147,7 @@ func (es *V7) NextScroll(ctx context.Context, scrollId string, scrollTime uint) 
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -179,7 +179,7 @@ func (es *V7) ClearScroll(scrollId string) error {
 		return errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return formatError(res)
 	}
 
@@ -224,7 +224,7 @@ func (es *V7) GetIndexAliases(index string) (map[string]interface{}, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -251,7 +251,7 @@ func (es *V7) GetIndexMapping(index string) (map[string]interface{}, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -278,7 +278,7 @@ func (es *V7) GetIndexSettings(index string) (map[string]interface{}, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -339,7 +339,7 @@ func (es *V7) Bulk(buf *bytes.Buffer) error {
 		return errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return formatError(res)
 	}
 
@@ -369,7 +369,7 @@ func (es *V7) CreateIndex(esSetting IESSettings) error {
 		return errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return formatError(res)
 	}
 
@@ -390,7 +390,7 @@ func (es *V7) IndexExisted(indexName string) (bool, error) {
 		return false, nil
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return false, formatError(res)
 	}
 
@@ -407,7 +407,7 @@ func (es *V7) DeleteIndex(index string) error {
 		return errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return formatError(res)
 	}
 
@@ -425,7 +425,7 @@ func (es *V7) GetIndexes() ([]string, error) {
 		return nil, err
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -454,7 +454,7 @@ func (es *V7) Count(ctx context.Context, index string) (uint64, error) {
 		return 0, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return 0, formatError(res)
 	}
 
@@ -477,7 +477,7 @@ func (es *V7) CreateTemplate(ctx context.Context, name string, body map[string]i
 		return errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return formatError(res)
 	}
 
@@ -494,7 +494,7 @@ func (es *V7) ClusterHealth(ctx context.Context) (map[string]interface{}, error)
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 
@@ -517,7 +517,7 @@ func (es *V7) GetInfo(ctx context.Context) (map[string]interface{}, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	if res.StatusCode != http.StatusOK {
+	if res.IsError() {
 		return nil, formatError(res)
 	}
 

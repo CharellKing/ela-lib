@@ -203,6 +203,10 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 		})
 	}
 
+	if parseUriResult.RequestAction == es.RequestActionTypeSearchDocumentWithLimit ||
+		parseUriResult.RequestAction == es.RequestActionTypeSearchDocument {
+		resp = gateway.SourceES.GetSearchResponse(resp)
+	}
 	c.JSON(statusCode, resp)
 }
 

@@ -344,10 +344,6 @@ func (es *BaseES) Request(c *gin.Context, bodyBytes []byte, parserUriResult *Uri
 
 	bodyMap, statusCode, _ := es.formatResponse(resp)
 
-	if parserUriResult.RequestAction == RequestActionTypeSearchDocumentWithLimit ||
-		parserUriResult.RequestAction == RequestActionTypeSearchDocument {
-		bodyMap = es.GetSearchResponse(bodyMap)
-	}
 	return bodyMap, statusCode, nil
 }
 
