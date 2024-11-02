@@ -405,8 +405,10 @@ func (m *Migrator) CopyIndexSettings(force bool) error {
 		return errors.WithStack(err)
 	}
 
-	if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
-		return errors.WithStack(err)
+	if force {
+		if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
+			return errors.WithStack(err)
+		}
 	}
 
 	return nil
@@ -801,8 +803,11 @@ func (m *Migrator) Sync(force bool) error {
 	}
 
 	utils.GetLogger(m.ctx).Debugf("sync with force: %+v", force)
-	if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
-		utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
+
+	if force {
+		if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
+			utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
+		}
 	}
 	if err := m.syncUpsert(ctx, getQueryMap(m.Ids), es2.OperationCreate); err != nil {
 		return errors.WithStack(err)
@@ -1351,8 +1356,10 @@ func (m *Migrator) Import(force bool) error {
 		return errors.WithStack(err)
 	}
 
-	if err := m.copyIndexSettings(ctx, m.IndexFilePair.Index, force); err != nil {
-		utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
+	if force {
+		if err := m.copyIndexSettings(ctx, m.IndexFilePair.Index, force); err != nil {
+			utils.GetLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
+		}
 	}
 
 	errCh := make(chan error)
