@@ -124,7 +124,7 @@ func (t *Task) Run() error {
 
 		for indexes, diffResult := range diffResultMap {
 			indexArray := strings.Split(indexes, ":")
-			utils.GetLogger(t.GetCtx()).
+			utils.GetTaskLogger(t.GetCtx()).
 				WithField("sourceIndex", indexArray[0]).
 				WithField("targetIndex", indexArray[1]).
 				WithField("percent", diffResult.Percent()).
@@ -144,7 +144,7 @@ func (t *Task) Run() error {
 
 		for indexes, diffResult := range diffResultMap {
 			indexArray := strings.Split(indexes, ":")
-			utils.GetLogger(t.GetCtx()).
+			utils.GetTaskLogger(t.GetCtx()).
 				WithField("sourceIndex", indexArray[0]).
 				WithField("targetIndex", indexArray[1]).
 				WithField("percent", diffResult.Percent()).

@@ -25,6 +25,8 @@ const (
 	CtxKeyDateTimeFormatFixFields CtxKey = "dateTimeFormatFixFields"
 
 	CtxKeyIgnoreSystemIndex CtxKey = "ignoreSystemIndex"
+
+	CtxKeyTaskProgress CtxKey = "taskProgress"
 )
 
 func GetCtxKeySourceESVersion(ctx context.Context) string {
@@ -129,4 +131,16 @@ func GetCtxKeyIgnoreSystemIndex(ctx context.Context) bool {
 
 func SetCtxKeyIgnoreSystemIndex(ctx context.Context, ignoreSystemIndex bool) context.Context {
 	return context.WithValue(ctx, CtxKeyIgnoreSystemIndex, ignoreSystemIndex)
+}
+
+func GetCtxKeyTaskProgress(ctx context.Context) *TaskProgress {
+	taskProgress := ctx.Value(CtxKeyTaskProgress)
+	if taskProgress == nil {
+		return nil
+	}
+	return taskProgress.(*TaskProgress)
+}
+
+func SetCtxKeyTaskProgress(ctx context.Context, taskProgress *TaskProgress) context.Context {
+	return context.WithValue(ctx, CtxKeyTaskProgress, taskProgress)
 }

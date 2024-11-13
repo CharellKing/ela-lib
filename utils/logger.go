@@ -2,10 +2,12 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/samber/lo"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"sync/atomic"
 )
 
 var logger *log.Logger
@@ -31,9 +33,19 @@ func InitLogger(cfg *config.Config) {
 	logger.SetReportCaller(true)
 }
 
-func GetLogger(ctx context.Context) *log.Entry {
+type TaskProgress struct {
+	TotalPairs    int
+	FinishedPairs atomic.Int32
+}
+
+func GetTaskLogger(ctx context.Context) *log.Entry {
 
 	entry := log.NewEntry(logger)
+
+	taskProgress := GetCtxKeyTaskProgress(ctx)
+	if taskProgress != nil {
+		entry = entry.WithField("taskProgress", fmt.Sprintf("%d/%d", taskProgress.FinishedPairs.Load(), taskProgress.TotalPairs))
+	}
 
 	ctxKeyMap := map[CtxKey]func(ctx context.Context) string{
 		CtxKeySourceESVersion: GetCtxKeySourceESVersion,
@@ -51,4 +63,8 @@ func GetLogger(ctx context.Context) *log.Entry {
 		}
 	}
 	return entry
+}
+
+func GetLogger(ctx context.Context) *log.Entry {
+	return log.NewEntry(logger)
 }
