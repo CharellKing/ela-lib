@@ -51,6 +51,8 @@ type BulkMigrator struct {
 
 	IndexFileRoot string
 
+	Query string
+
 	taskProgress *utils.TaskProgress
 }
 
@@ -128,8 +130,8 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
-
-		taskProgress: m.taskProgress,
+		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexPair)
@@ -169,6 +171,7 @@ func (m *BulkMigrator) WithIndexFilePairs(indexFilePairs ...*config.IndexFilePai
 		Pattern:           m.Pattern,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
+		Query:             m.Query,
 		taskProgress:      m.taskProgress,
 	}
 
@@ -209,6 +212,7 @@ func (m *BulkMigrator) WithIndexTemplates(indexTemplates ...*config.IndexTemplat
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 
 	newIndexTemplateMap := make(map[string]*config.IndexTemplate)
@@ -248,6 +252,7 @@ func (m *BulkMigrator) WithIndexFileRoot(indexFileRoot string) *BulkMigrator {
 		IndexFileRoot:     indexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 
 	return newBulkMigrator
@@ -281,6 +286,7 @@ func (m *BulkMigrator) WithScrollSize(scrollSize uint) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -311,6 +317,7 @@ func (m *BulkMigrator) WithScrollTime(scrollTime uint) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -341,6 +348,7 @@ func (m *BulkMigrator) WithSliceSize(sliceSize uint) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -371,6 +379,7 @@ func (m *BulkMigrator) WithBufferCount(bufferCount uint) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -402,6 +411,7 @@ func (m *BulkMigrator) WithActionParallelism(actionParallelism uint) *BulkMigrat
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -433,6 +443,7 @@ func (m *BulkMigrator) WithActionSize(actionSize uint) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -489,6 +500,7 @@ func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 
 	return newBulkMigrator
@@ -521,6 +533,7 @@ func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -548,6 +561,31 @@ func (m *BulkMigrator) WithIds(ids []string) *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
+	}
+}
+
+func (m *BulkMigrator) WithQuery(query string) *BulkMigrator {
+	return &BulkMigrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		Parallelism:       m.Parallelism,
+		IndexPairMap:      m.IndexPairMap,
+		Error:             m.Error,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		ActionParallelism: m.ActionParallelism,
+		IndexFilePairMap:  m.IndexFilePairMap,
+		Pattern:           m.Pattern,
+		IndexFileRoot:     m.IndexFileRoot,
+		IndexTemplates:    m.IndexTemplates,
+		taskProgress:      m.taskProgress,
+		Query:             query,
 	}
 }
 
@@ -571,6 +609,7 @@ func (m *BulkMigrator) clone() *BulkMigrator {
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
+		Query:             m.Query,
 	}
 }
 
@@ -866,7 +905,8 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 			WithBufferCount(m.BufferCount).
 			WithActionParallelism(m.ActionParallelism).
 			WithActionSize(m.ActionSize).
-			WithIds(m.Ids)
+			WithIds(m.Ids).
+			WithQuery(m.Query)
 
 		pool.Submit(func() {
 			callback(newMigrator)
@@ -889,7 +929,8 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 			WithBufferCount(m.BufferCount).
 			WithActionParallelism(m.ActionParallelism).
 			WithActionSize(m.ActionSize).
-			WithIds(m.Ids)
+			WithIds(m.Ids).
+			WithQuery(m.Query)
 
 		pool.Submit(func() {
 			callback(newMigrator)
@@ -912,7 +953,8 @@ func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migr
 			WithBufferCount(m.BufferCount).
 			WithActionParallelism(m.ActionParallelism).
 			WithActionSize(m.ActionSize).
-			WithIds(m.Ids)
+			WithIds(m.Ids).
+			WithQuery(m.Query)
 
 		pool.Submit(func() {
 			callback(newMigrator)

@@ -45,7 +45,8 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithIds(taskCfg.Ids).
 		WithIndexFilePairs(taskCfg.IndexFilePairs...).
 		WithIndexFileRoot(taskCfg.IndexFileRoot).
-		WithIndexTemplates(taskCfg.IndexTemplates...)
+		WithIndexTemplates(taskCfg.IndexTemplates...).
+		WithQuery(taskCfg.Query)
 	if taskCfg.IndexPattern != nil {
 		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
 	}

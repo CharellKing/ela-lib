@@ -64,6 +64,8 @@ type Migrator struct {
 	FileDir string
 
 	Ids []string
+
+	Query string
 }
 
 func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstConfig *config.ESConfig) (*Migrator, error) {
@@ -173,6 +175,7 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -195,6 +198,7 @@ func (m *Migrator) WithIndexTemplate(indexTemplate config.IndexTemplate) *Migrat
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     &indexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -221,6 +225,7 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -247,6 +252,7 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -272,6 +278,7 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -297,6 +304,7 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -322,6 +330,7 @@ func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -348,6 +357,7 @@ func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 		Ids:               m.Ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -370,6 +380,7 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 		Ids:               ids,
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
 	}
 }
 
@@ -392,6 +403,30 @@ func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migra
 		Ids:               m.Ids,
 		IndexFilePair:     indexFilePair,
 		IndexTemplate:     m.IndexTemplate,
+		Query:             m.Query,
+	}
+}
+
+func (m *Migrator) WithQuery(query string) *Migrator {
+	if m.err != nil {
+		return m
+	}
+
+	return &Migrator{
+		ctx:               m.ctx,
+		SourceES:          m.SourceES,
+		TargetES:          m.TargetES,
+		IndexPair:         m.IndexPair,
+		ScrollSize:        m.ScrollSize,
+		ScrollTime:        m.ScrollTime,
+		SliceSize:         m.SliceSize,
+		BufferCount:       m.BufferCount,
+		ActionParallelism: m.ActionParallelism,
+		ActionSize:        m.ActionSize,
+		Ids:               m.Ids,
+		IndexFilePair:     m.IndexFilePair,
+		IndexTemplate:     m.IndexTemplate,
+		Query:             query,
 	}
 }
 
@@ -473,17 +508,30 @@ func (m *Migrator) CreateTemplate() error {
 	return nil
 }
 
-func getQueryMap(docIds []string) map[string]interface{} {
-	if len(docIds) <= 0 {
-		return nil
+func (m *Migrator) mergeQueryMap(ids []string, subQueryMap map[string]interface{}) map[string]interface{} {
+	query := make(map[string]interface{})
+	if len(ids) > 0 {
+		query = map[string]interface{}{
+			"terms": map[string]interface{}{
+				"_id": ids,
+			},
+		}
+	}
+	if len(subQueryMap) > 0 {
+		query = lo.Assign(query, subQueryMap)
 	}
 	return map[string]interface{}{
-		"query": map[string]interface{}{
-			"terms": map[string]interface{}{
-				"_id": docIds,
-			},
-		},
+		"query": query,
 	}
+}
+
+func (m *Migrator) getQueryMap(ctx context.Context) map[string]interface{} {
+	subQuery := make(map[string]interface{})
+	err := json.Unmarshal([]byte(m.Query), &subQuery)
+	if err != nil {
+		utils.GetTaskLogger(ctx).Warnf("parse query error: %+v", err)
+	}
+	return m.mergeQueryMap(m.Ids, subQuery)
 }
 
 func (m *Migrator) SyncDiff() (*DiffResult, error) {
@@ -513,21 +561,21 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 
 	if len(diffResult.CreateDocs) > 0 {
 		utils.GetTaskLogger(ctx).Debugf("sync with create docs: %+v", len(diffResult.CreateDocs))
-		if err := m.syncUpsert(ctx, getQueryMap(diffResult.CreateDocs), es2.OperationCreate); err != nil {
+		if err := m.syncUpsert(ctx, m.mergeQueryMap(diffResult.CreateDocs, nil), es2.OperationCreate); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
 
 	if len(diffResult.UpdateDocs) > 0 {
 		utils.GetTaskLogger(ctx).Debugf("sync with update docs: %+v", len(diffResult.UpdateDocs))
-		if err := m.syncUpsert(ctx, getQueryMap(diffResult.UpdateDocs), es2.OperationUpdate); err != nil {
+		if err := m.syncUpsert(ctx, m.mergeQueryMap(diffResult.UpdateDocs, nil), es2.OperationUpdate); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
 
 	if len(diffResult.DeleteDocs) > 0 {
 		utils.GetTaskLogger(ctx).Debugf("sync with delete docs: %+v", len(diffResult.DeleteDocs))
-		if err := m.syncUpsert(ctx, getQueryMap(diffResult.DeleteDocs), es2.OperationDelete); err != nil {
+		if err := m.syncUpsert(ctx, m.mergeQueryMap(diffResult.DeleteDocs, nil), es2.OperationDelete); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
@@ -607,7 +655,7 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	errCh := make(chan error)
 	errsCh := m.handleMultipleErrors(ctx, errCh)
 
-	queryMap := getQueryMap(m.Ids)
+	queryMap := m.getQueryMap(ctx)
 
 	sourceDocCh, sourceTotal := m.search(ctx, m.SourceES, m.IndexPair.SourceIndex, queryMap, keywordFields, errCh, true)
 
@@ -809,7 +857,7 @@ func (m *Migrator) Sync(force bool) error {
 			utils.GetTaskLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
 		}
 	}
-	if err := m.syncUpsert(ctx, getQueryMap(m.Ids), es2.OperationCreate); err != nil {
+	if err := m.syncUpsert(ctx, m.getQueryMap(ctx), es2.OperationCreate); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil
@@ -1443,7 +1491,7 @@ func (m *Migrator) export(ctx context.Context) error {
 		total uint64
 	)
 
-	query := getQueryMap(m.Ids)
+	query := m.getQueryMap(ctx)
 	docCh, total = m.search(ctx, m.SourceES, m.IndexFilePair.Index, query, nil, errCh, false)
 
 	m.bulkFileWorker(ctx, docCh, total, indexFileSetting.Files, errCh)

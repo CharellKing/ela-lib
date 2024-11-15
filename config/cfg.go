@@ -31,6 +31,7 @@ type TaskCfg struct {
 	Ids               []string         `mapstructure:"ids"`
 	IndexFilePairs    []*IndexFilePair `mapstructure:"index_file_pairs"`
 	IndexFileRoot     string           `mapstructure:"index_file_root"`
+	Query             string           `mapstructure:"query"`
 }
 
 type IndexPair struct {
