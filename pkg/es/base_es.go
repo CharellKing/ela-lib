@@ -212,13 +212,32 @@ func (es *BaseES) MatchRule(c *gin.Context) *UriPathParserResult {
 		}
 	}
 
-	return nil
+	variableMap := make(map[string]string)
+	if es.ClusterVersionGte7() {
+		if _, ok := variableMap["index"]; ok {
+			variableMap["docType"] = "_doc"
+		}
+	}
+
+	return &UriPathParserResult{
+		VariableMap:   variableMap,
+		RequestAction: RequestActionType(c.Request.Method),
+	}
 }
 
-func (es *BaseES) MakeUri(uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error) {
+func (es *BaseES) MakeUri(c *gin.Context, uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error) {
 	actionRule, ok := es.ActionRuleMap[uriPathParserResult.RequestAction]
 	if !ok {
-		return nil, fmt.Errorf("action rule not found %s", uriPathParserResult.RequestAction)
+		utils.GetLogger(c).Warnf("action rule not found %s", uriPathParserResult.RequestAction)
+
+		return &UriPathMakeResult{
+			Uri:    c.Request.RequestURI,
+			Method: MethodType(c.Request.Method),
+
+			Address:  es.Addresses[rand.Intn(len(es.Addresses))],
+			User:     es.User,
+			Password: es.Password,
+		}, nil
 	}
 
 	var (
@@ -297,7 +316,7 @@ func (es *BaseES) IsWrite(requestActionType RequestActionType) bool {
 }
 
 func (es *BaseES) Request(c *gin.Context, bodyBytes []byte, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error) {
-	makeUriResult, err := es.MakeUri(parserUriResult)
+	makeUriResult, err := es.MakeUri(c, parserUriResult)
 	if err != nil {
 		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}
@@ -331,6 +350,13 @@ func (es *BaseES) Request(c *gin.Context, bodyBytes []byte, parserUriResult *Uri
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
+
+	if resp != nil {
+		for k, v := range resp.Header {
+			c.Header(k, v[0])
+		}
+	}
+
 	if err != nil {
 		return nil, http.StatusInternalServerError, errors.WithStack(err)
 	}

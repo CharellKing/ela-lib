@@ -152,10 +152,10 @@ tasks:
 #    action: sync_diff
 #    action: sync_diff
 
-#gateway:
-#  address: "0.0.0.0:8080"
-#  user: "user"
-#  password: "12342"
-#  source_es: es5
-#  target_es: es8
-#  master: es8
+gateway:
+  address: "0.0.0.0:8080"
+  user: "user"
+  password: "12342"
+  source_es: es5
+  target_es: es8
+  master: es8

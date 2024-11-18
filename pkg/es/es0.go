@@ -96,7 +96,7 @@ type ES interface {
 
 	MatchRule(c *gin.Context) *UriPathParserResult
 
-	MakeUri(uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error)
+	MakeUri(c *gin.Context, uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error)
 
 	GetSearchResponse(bodyMap map[string]interface{}) map[string]interface{}
 
