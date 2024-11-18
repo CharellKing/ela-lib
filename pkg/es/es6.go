@@ -344,6 +344,10 @@ func (es *V6) CreateIndex(esSetting IESSettings) error {
 		return errors.WithStack(err)
 	}
 
+	if res.StatusCode == 400 {
+		return nil
+	}
+
 	if res.IsError() {
 		return formatError(res)
 	}
@@ -379,6 +383,10 @@ func (es *V6) DeleteIndex(index string) error {
 	res, err := es.Client.Indices.Delete([]string{index})
 	if err != nil {
 		return errors.WithStack(err)
+	}
+
+	if res.StatusCode == 404 {
+		return nil
 	}
 
 	if res.IsError() {

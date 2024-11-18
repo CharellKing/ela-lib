@@ -520,16 +520,22 @@ func (m *Migrator) mergeQueryMap(ids []string, subQueryMap map[string]interface{
 	if len(subQueryMap) > 0 {
 		query = lo.Assign(query, subQueryMap)
 	}
-	return map[string]interface{}{
-		"query": query,
+
+	if len(query) > 0 {
+		return map[string]interface{}{
+			"query": query,
+		}
 	}
+	return nil
 }
 
 func (m *Migrator) getQueryMap(ctx context.Context) map[string]interface{} {
 	subQuery := make(map[string]interface{})
-	err := json.Unmarshal([]byte(m.Query), &subQuery)
-	if err != nil {
-		utils.GetTaskLogger(ctx).Warnf("parse query error: %+v", err)
+	if lo.IsNotEmpty(m.Query) {
+		err := json.Unmarshal([]byte(m.Query), &subQuery)
+		if err != nil {
+			utils.GetTaskLogger(ctx).Warnf("parse query error: %+v", err)
+		}
 	}
 	return m.mergeQueryMap(m.Ids, subQuery)
 }

@@ -90,11 +90,6 @@ tasks:
     buffer_count: 205
     action_parallelism: 206
     action_size: 207
-    ids:
-      - "1"
-      - "2"
-      - "3"
-
     force: true
 
 #  - name: sync-diff
