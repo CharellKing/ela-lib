@@ -521,12 +521,7 @@ func (m *Migrator) mergeQueryMap(ids []string, subQueryMap map[string]interface{
 		query = lo.Assign(query, subQueryMap)
 	}
 
-	if len(query) > 0 {
-		return map[string]interface{}{
-			"query": query,
-		}
-	}
-	return nil
+	return query
 }
 
 func (m *Migrator) getQueryMap(ctx context.Context) map[string]interface{} {

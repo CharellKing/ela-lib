@@ -77,7 +77,7 @@ tasks:
     source_es: es5
     target_es: es8
     action: sync
-    index_pattern: .*
+#    index_pattern: .*
     index_pairs:
       -
         source_index: "sample_index"
@@ -90,6 +90,7 @@ tasks:
     buffer_count: 205
     action_parallelism: 206
     action_size: 207
+    query: '{"terms": {"_id": ["1", "2", "3"]}}'
     force: true
 
 #  - name: sync-diff

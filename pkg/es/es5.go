@@ -110,22 +110,20 @@ func (es *V5) NewScroll(ctx context.Context, index string, option *ScrollOption)
 		es.Search.WithScroll(cast.ToDuration(option.ScrollTime) * time.Minute),
 	}
 
-	query := make(map[string]interface{})
-	for k, v := range option.Query {
-		query[k] = v
-	}
+	body := make(map[string]interface{})
+	body["query"] = option.Query
 
 	if option.SliceId != nil {
-		query["slice"] = map[string]interface{}{
+		body["slice"] = map[string]interface{}{
 			"field": "_uid",
 			"id":    *option.SliceId,
 			"max":   *option.SliceSize,
 		}
 	}
 
-	if len(query) > 0 {
+	if len(body) > 0 {
 		var buf bytes.Buffer
-		_ = json.NewEncoder(&buf).Encode(query)
+		_ = json.NewEncoder(&buf).Encode(body)
 		scrollSearchOptions = append(scrollSearchOptions, es.Client.Search.WithBody(&buf))
 	}
 
