@@ -9,7 +9,6 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
 	_ "github.com/pkg/errors"
-	"github.com/spf13/cast"
 	"io"
 	"math/rand"
 	"net/http"
@@ -42,18 +41,13 @@ func NewBaseES(clusterVersion string, addresses []string, user string, password 
 	return baseES
 }
 
-func (es *BaseES) ClusterVersionGte7() bool {
-	segments := strings.Split(es.ClusterVersion, ".")
-	return cast.ToInt(segments[0]) >= 7
-}
-
 func (es *BaseES) GetActionRuleMap() map[RequestActionType]*UriParserRule {
 	if len(es.ActionRuleMap) > 0 {
 		return es.ActionRuleMap
 	}
 
 	var originActionRuleMap map[RequestActionType]*UriParserRule
-	if strings.HasPrefix(es.ClusterVersion, "5.") {
+	if ClusterVersionLte5(es.ClusterVersion) {
 		originActionRuleMap = getUriParserRuleMapWithRequestActionForV5()
 	} else if strings.HasPrefix(es.ClusterVersion, "6.") {
 		originActionRuleMap = getUriParserRuleMapWithRequestActionForV6()
@@ -200,7 +194,7 @@ func (es *BaseES) MatchRule(c *gin.Context) *UriPathParserResult {
 		}
 		variableMap, ok := es.matchRule(c.Request.URL.Path, matchRule.UriPattern)
 		if ok {
-			if es.ClusterVersionGte7() {
+			if ClusterVersionGte7(es.ClusterVersion) {
 				if _, ok := variableMap["index"]; ok {
 					variableMap["docType"] = "_doc"
 				}
@@ -213,7 +207,7 @@ func (es *BaseES) MatchRule(c *gin.Context) *UriPathParserResult {
 	}
 
 	variableMap := make(map[string]string)
-	if es.ClusterVersionGte7() {
+	if ClusterVersionGte7(es.ClusterVersion) {
 		if _, ok := variableMap["index"]; ok {
 			variableMap["docType"] = "_doc"
 		}
@@ -289,7 +283,7 @@ func (es *BaseES) MakeUri(c *gin.Context, uriPathParserResult *UriPathParserResu
 }
 
 func (es *BaseES) GetSearchResponse(bodyMap map[string]interface{}) map[string]interface{} {
-	if es.ClusterVersionGte7() {
+	if ClusterVersionGte7(es.ClusterVersion) {
 		totalValue, ok := utils.GetValueFromMapByPath(bodyMap, "hits.total.value")
 		if !ok {
 			totalValue, _ = utils.GetValueFromMapByPath(bodyMap, "hits.total")

@@ -55,12 +55,13 @@ func GetESSettings(esVersion string, settings map[string]interface{}) (IESSettin
 			return nil, errors.WithStack(err)
 		}
 		return &v6Settings, nil
-	} else if strings.HasPrefix(esVersion, "5.") {
+	} else if ClusterVersionLte5(esVersion) {
 		var v5Settings V5Settings
 		if err := mapstructure.Decode(settings, &v5Settings); err != nil {
 			return nil, errors.WithStack(err)
 		}
 		return &v5Settings, nil
 	}
+	
 	return nil, fmt.Errorf("unsupported version: %s", esVersion)
 }

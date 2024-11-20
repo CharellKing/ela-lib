@@ -110,7 +110,7 @@ func (m *Migrator) GetCtx() context.Context {
 }
 
 func (m *Migrator) addDateTimeFixFields(ctx context.Context, fieldMap map[string]interface{}) context.Context {
-	if !strings.HasPrefix(utils.GetCtxKeySourceESVersion(ctx), "5.") {
+	if !es2.ClusterVersionLte5(utils.GetCtxKeySourceESVersion(ctx)) {
 		return ctx
 	}
 
@@ -1173,7 +1173,7 @@ func (m *Migrator) GetTargetESSetting(sourceESSetting es2.IESSettings, targetInd
 		return sourceESSetting.ToTargetV7Settings(targetIndex)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "6.") {
 		return sourceESSetting.ToTargetV6Settings(targetIndex)
-	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "5.") {
+	} else if es2.ClusterVersionLte5(m.TargetES.GetClusterVersion()) {
 		return sourceESSetting.ToTargetV5Settings(targetIndex)
 	}
 
@@ -1187,7 +1187,7 @@ func (m *Migrator) GetTargetESTemplateSetting(sourceESSetting es2.IESSettings, p
 		return sourceESSetting.ToV7TemplateSettings(patterns, order)
 	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "6.") {
 		return sourceESSetting.ToV6TemplateSettings(patterns, order)
-	} else if strings.HasPrefix(m.TargetES.GetClusterVersion(), "5.") {
+	} else if es2.ClusterVersionLte5(m.TargetES.GetClusterVersion()) {
 		return sourceESSetting.ToV5TemplateSettings(patterns, order)
 	}
 

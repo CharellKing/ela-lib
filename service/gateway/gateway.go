@@ -119,9 +119,11 @@ func (gateway *ESGateway) convertMasterRequestBody(masterRequestBody []byte, par
 	requestBody := masterRequestBody
 	if parserResult.RequestAction == es.RequestActionTypeBulkDocument {
 		var docTypeReservationType = es.DocTypeReservationTypeKeep
-		if gateway.MasterES.ClusterVersionGte7() == true && gateway.SourceES.ClusterVersionGte7() == false {
+		if es.ClusterVersionGte7(gateway.MasterES.GetClusterVersion()) == true &&
+			es.ClusterVersionGte7(gateway.SourceES.GetClusterVersion()) == false {
 			docTypeReservationType = es.DocTypeReservationTypeDelete
-		} else if gateway.MasterES.ClusterVersionGte7() == false && gateway.SourceES.ClusterVersionGte7() == true {
+		} else if es.ClusterVersionGte7(gateway.MasterES.GetClusterVersion()) == false &&
+			es.ClusterVersionGte7(gateway.SourceES.GetClusterVersion()) == true {
 			docTypeReservationType = es.DocTypeReservationTypeCreate
 		}
 		requestBody, err = es.AdjustBulkRequestBodyWithOnlyDocType(masterRequestBody, docTypeReservationType)
@@ -138,9 +140,11 @@ func (gateway *ESGateway) convertSalveRequestBody(masterRequestBody []byte,
 	requestBody := masterRequestBody
 	if parserResult.RequestAction == es.RequestActionTypeBulkDocument {
 		var docTypeReservationType = es.DocTypeReservationTypeKeep
-		if gateway.SlaveES.ClusterVersionGte7() == true && gateway.SourceES.ClusterVersionGte7() == false {
+		if es.ClusterVersionGte7(gateway.SlaveES.GetClusterVersion()) == true &&
+			es.ClusterVersionGte7(gateway.SourceES.GetClusterVersion()) == false {
 			docTypeReservationType = es.DocTypeReservationTypeDelete
-		} else if gateway.SlaveES.ClusterVersionGte7() == false && gateway.SourceES.ClusterVersionGte7() == true {
+		} else if es.ClusterVersionGte7(gateway.SlaveES.GetClusterVersion()) == false &&
+			es.ClusterVersionGte7(gateway.SourceES.GetClusterVersion()) == true {
 			docTypeReservationType = es.DocTypeReservationTypeCreate
 		}
 		requestBody, err = es.AdjustBulkRequestBody(masterRequestBody, masterResponse, docTypeReservationType)

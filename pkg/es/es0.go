@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/cast"
 	"io"
 	"net/http"
 	"strings"
@@ -107,8 +108,6 @@ type ES interface {
 	IsWrite(requestActionType RequestActionType) bool
 
 	Request(c *gin.Context, bodyBytes []byte, parserUriResult *UriPathParserResult) (map[string]interface{}, int, error)
-
-	ClusterVersionGte7() bool
 }
 
 type V0 struct {
@@ -136,14 +135,14 @@ func (es *V0) GetES() (ES, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	if strings.HasPrefix(clusterVersion.Version.Number, "8.") {
-		return NewESV8(es.Config, clusterVersion.Version.Number)
-	} else if strings.HasPrefix(clusterVersion.Version.Number, "7.") {
-		return NewESV7(es.Config, clusterVersion.Version.Number)
+	if ClusterVersionLte5(clusterVersion.Version.Number) {
+		return NewESV5(es.Config, clusterVersion.Version.Number)
 	} else if strings.HasPrefix(clusterVersion.Version.Number, "6.") {
 		return NewESV6(es.Config, clusterVersion.Version.Number)
-	} else if strings.HasPrefix(clusterVersion.Version.Number, "5.") {
-		return NewESV5(es.Config, clusterVersion.Version.Number)
+	} else if strings.HasPrefix(clusterVersion.Version.Number, "7.") {
+		return NewESV7(es.Config, clusterVersion.Version.Number)
+	} else if strings.HasPrefix(clusterVersion.Version.Number, "8.") {
+		return NewESV8(es.Config, clusterVersion.Version.Number)
 	}
 
 	return nil, errors.Errorf("unsupported version: %s", clusterVersion.Version.Number)
@@ -209,4 +208,14 @@ func formatError(res IResponse) error {
 	statusStr := res.Status()
 	bodyStr := res.String()
 	return errors.Errorf("status: %s, body: %s", statusStr, bodyStr)
+}
+
+func ClusterVersionGte7(clusterVersion string) bool {
+	segments := strings.Split(clusterVersion, ".")
+	return cast.ToInt(segments[0]) >= 7
+}
+
+func ClusterVersionLte5(clusterVersion string) bool {
+	segments := strings.Split(clusterVersion, ".")
+	return cast.ToInt(segments[0]) <= 5
 }
