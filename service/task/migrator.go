@@ -979,8 +979,9 @@ func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, 
 		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
-				percent, count.Load(), total, len(docCh))
+			utils.GetTaskLogger(ctx).
+				Infof("bulk progress %.4f (%d, %d, %d)",
+					percent, count.Load(), total, len(docCh))
 			lastPrintTime = time.Now()
 		}
 		switch operation {

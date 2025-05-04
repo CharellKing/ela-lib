@@ -26,7 +26,8 @@ const (
 
 	CtxKeyIgnoreSystemIndex CtxKey = "ignoreSystemIndex"
 
-	CtxKeyTaskProgress CtxKey = "taskProgress"
+	CtxKeyTaskProgress          CtxKey = "taskProgress"
+	CtxKeyTaskIndexPairProgress CtxKey = "taskIndexPairProgress"
 )
 
 func GetCtxKeySourceESVersion(ctx context.Context) string {
@@ -133,14 +134,14 @@ func SetCtxKeyIgnoreSystemIndex(ctx context.Context, ignoreSystemIndex bool) con
 	return context.WithValue(ctx, CtxKeyIgnoreSystemIndex, ignoreSystemIndex)
 }
 
-func GetCtxKeyTaskProgress(ctx context.Context) *TaskProgress {
+func GetCtxKeyTaskProgress(ctx context.Context) *Progress {
 	taskProgress := ctx.Value(CtxKeyTaskProgress)
 	if taskProgress == nil {
 		return nil
 	}
-	return taskProgress.(*TaskProgress)
+	return taskProgress.(*Progress)
 }
 
-func SetCtxKeyTaskProgress(ctx context.Context, taskProgress *TaskProgress) context.Context {
+func SetCtxKeyTaskProgress(ctx context.Context, taskProgress *Progress) context.Context {
 	return context.WithValue(ctx, CtxKeyTaskProgress, taskProgress)
 }

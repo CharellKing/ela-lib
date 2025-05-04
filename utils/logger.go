@@ -12,7 +12,11 @@ import (
 
 var logger *log.Logger
 
-func InitLogger(cfg *config.Config) {
+type progressCallBackType func(ctx context.Context, jobId string, taskProgress *Progress, sourceProgress *Progress, targetProgress *Progress)
+
+var progressCallBack progressCallBackType
+
+func InitLogger(cfg *config.Config, callback progressCallBackType) {
 	levelMap := map[string]log.Level{
 		"debug": log.DebugLevel,
 		"info":  log.InfoLevel,
@@ -31,11 +35,40 @@ func InitLogger(cfg *config.Config) {
 		Level:     level,
 	}
 	logger.SetReportCaller(true)
+
+	progressCallBack = callback
 }
 
-type TaskProgress struct {
-	TotalPairs    int
-	FinishedPairs atomic.Int32
+type Progress struct {
+	Total   uint64
+	Current atomic.Uint64
+}
+
+//type Progress struct {
+//	TotalCount   uint64
+//	CurrentCount atomic.Int32
+//}
+
+func GetTaskLoggerProgress(ctx context.Context, sourceProgress *Progress, targetProgress *Progress) *log.Entry {
+	entry := GetTaskLogger(ctx)
+
+	if sourceProgress != nil {
+		entry = entry.WithField("sourceProgress", fmt.Sprintf("%d/%d", sourceProgress.Current, sourceProgress.Total))
+	}
+
+	if targetProgress != nil {
+		entry = entry.WithField("targetProgress", fmt.Sprintf("%d/%d", targetProgress.Current, targetProgress.Total))
+	}
+
+	taskProgress := GetCtxKeyTaskProgress(ctx)
+	GoRecovery(ctx, func() {
+		if progressCallBack != nil {
+			jobId := GetCtxKeyTaskID(ctx)
+			progressCallBack(ctx, jobId, taskProgress, sourceProgress, targetProgress)
+		}
+	})
+
+	return entry
 }
 
 func GetTaskLogger(ctx context.Context) *log.Entry {
@@ -44,7 +77,7 @@ func GetTaskLogger(ctx context.Context) *log.Entry {
 
 	taskProgress := GetCtxKeyTaskProgress(ctx)
 	if taskProgress != nil {
-		entry = entry.WithField("taskProgress", fmt.Sprintf("%d/%d", taskProgress.FinishedPairs.Load(), taskProgress.TotalPairs))
+		entry = entry.WithField("taskProgress", fmt.Sprintf("%d/%d", taskProgress.Current.Load(), taskProgress.Total))
 	}
 
 	ctxKeyMap := map[CtxKey]func(ctx context.Context) string{
