@@ -25,7 +25,7 @@ func TestRun(t *testing.T) {
 		return
 	}
 
-	utils.InitLogger(&cfg)
+	utils.InitLogger(&cfg, nil)
 
 	ctx := context.Background()
 	taskMgr, err := NewTaskMgr(&cfg)

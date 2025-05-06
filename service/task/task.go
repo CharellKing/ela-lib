@@ -49,7 +49,7 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 		WithIndexTemplates(taskCfg.IndexTemplates...).
 		WithQuery(taskCfg.Query)
 	if taskCfg.IndexPattern != nil {
-		bulkMigrator = bulkMigrator.WithPatternIndexes(*taskCfg.IndexPattern)
+		bulkMigrator = bulkMigrator.WithPatternIndexes(taskCfg.IndexPattern)
 	}
 
 	return &Task{
@@ -81,6 +81,10 @@ func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config) (
 
 func (t *Task) GetCtx() context.Context {
 	return t.bulkMigrator.GetCtx()
+}
+
+func (t *Task) Cancel() {
+	*t.isCancelled = true
 }
 
 func (t *Task) Compare() (map[string]*DiffResult, error) {
