@@ -26,8 +26,11 @@ const (
 
 	CtxKeyIgnoreSystemIndex CtxKey = "ignoreSystemIndex"
 
-	CtxKeyTaskProgress          CtxKey = "taskProgress"
-	CtxKeyTaskIndexPairProgress CtxKey = "taskIndexPairProgress"
+	CtxKeyTaskProgress                CtxKey = "taskProgress"
+	CtxKeyTaskSourceIndexPairProgress CtxKey = "taskSourceIndexPairProgress"
+
+	CtxKeySourceQueueExtrusion CtxKey = "sourceQueueExtrusion"
+	CtxKeyTargetQueueExtrusion CtxKey = "targetQueueExtrusion"
 )
 
 func GetCtxKeySourceESVersion(ctx context.Context) string {
@@ -144,4 +147,52 @@ func GetCtxKeyTaskProgress(ctx context.Context) *Progress {
 
 func SetCtxKeyTaskProgress(ctx context.Context, taskProgress *Progress) context.Context {
 	return context.WithValue(ctx, CtxKeyTaskProgress, taskProgress)
+}
+
+func GetCtxKeySourceIndexPairProgress(ctx context.Context) *Progress {
+	indexPairProgress := ctx.Value(GetCtxKeySourceIndexPairProgress)
+	if indexPairProgress == nil {
+		return nil
+	}
+	return indexPairProgress.(*Progress)
+}
+
+func SetCtxKeySourceIndexPairProgress(ctx context.Context, indexPairProgress *Progress) context.Context {
+	return context.WithValue(ctx, GetCtxKeySourceIndexPairProgress, indexPairProgress)
+}
+
+func GetCtxKeyTargetIndexPairProgress(ctx context.Context) *Progress {
+	indexPairProgress := ctx.Value(GetCtxKeyTargetIndexPairProgress)
+	if indexPairProgress == nil {
+		return nil
+	}
+	return indexPairProgress.(*Progress)
+}
+
+func SetCtxKeyTargetIndexPairProgress(ctx context.Context, indexPairProgress *Progress) context.Context {
+	return context.WithValue(ctx, GetCtxKeyTargetIndexPairProgress, indexPairProgress)
+}
+
+func GetCtxKeySourceQueueExtrusion(ctx context.Context) *Progress {
+	queueExtrusion := ctx.Value(CtxKeySourceQueueExtrusion)
+	if queueExtrusion == nil {
+		return nil
+	}
+	return queueExtrusion.(*Progress)
+}
+
+func SetCtxKeySourceQueueExtrusion(ctx context.Context, queueExtrusion *Progress) context.Context {
+	return context.WithValue(ctx, CtxKeySourceQueueExtrusion, queueExtrusion)
+}
+
+func GetCtxKeyTargetQueueExtrusion(ctx context.Context) *Progress {
+	queueExtrusion := ctx.Value(CtxKeyTargetQueueExtrusion)
+	if queueExtrusion == nil {
+		return nil
+	}
+	return queueExtrusion.(*Progress)
+}
+
+func SetCtxKeyTargetQueueExtrusion(ctx context.Context, queueExtrusion *Progress) context.Context {
+	return context.WithValue(ctx, CtxKeyTargetQueueExtrusion, queueExtrusion)
 }

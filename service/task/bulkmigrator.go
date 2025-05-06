@@ -54,9 +54,11 @@ type BulkMigrator struct {
 	Query string
 
 	taskProgress *utils.Progress
+
+	isCancelled *bool
 }
 
-func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES) *BulkMigrator {
+func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES, isCancelled *bool) *BulkMigrator {
 	if lo.IsNotEmpty(sourceES) {
 		ctx = utils.SetCtxKeySourceESVersion(ctx, sourceES.GetClusterVersion())
 	}
@@ -65,7 +67,7 @@ func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES) *Bulk
 		ctx = utils.SetCtxKeyTargetESVersion(ctx, targetES.GetClusterVersion())
 	}
 
-	taskProgress := &utils.Progress{}
+	taskProgress := utils.NewProgress(utils.ProgressNameTask, 0)
 	ctx = utils.SetCtxKeyTaskProgress(ctx, taskProgress)
 	return &BulkMigrator{
 		ctx:               ctx,
@@ -82,6 +84,7 @@ func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES) *Bulk
 		ActionParallelism: defaultActionParallelism,
 
 		taskProgress: taskProgress,
+		isCancelled:  isCancelled,
 	}
 }
 
@@ -96,7 +99,7 @@ func NewBulkMigrator(ctx context.Context, srcConfig *config.ESConfig, dstConfig 
 		return nil, errors.WithStack(err)
 	}
 
-	return NewBulkMigratorWithES(ctx, srcES, dstES), nil
+	return NewBulkMigratorWithES(ctx, srcES, dstES, lo.ToPtr(false)), nil
 }
 
 func (m *BulkMigrator) GetCtx() context.Context {
@@ -895,9 +898,12 @@ func (m *BulkMigrator) getIndexFilePairFromIndexFileRoot() *BulkMigrator {
 
 func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
-	m.taskProgress.Total = len(m.IndexPairMap)
+	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
 	for _, indexPair := range m.IndexPairMap {
-		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES)
+		if *m.isCancelled {
+			break
+		}
+		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexPair(*indexPair).
 			WithScrollSize(m.ScrollSize).
 			WithScrollTime(m.ScrollTime).
@@ -910,7 +916,7 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 
 		pool.Submit(func() {
 			callback(newMigrator)
-			m.taskProgress.Current.Add(1)
+			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
@@ -919,9 +925,9 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migrator)) {
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
 
-	m.taskProgress.Total = len(m.IndexPairMap)
+	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
 	for _, indexTemplate := range m.IndexTemplates {
-		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES)
+		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexTemplate(*indexTemplate).
 			WithScrollSize(m.ScrollSize).
 			WithScrollTime(m.ScrollTime).
@@ -934,7 +940,7 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 
 		pool.Submit(func() {
 			callback(newMigrator)
-			m.taskProgress.Current.Add(1)
+			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
@@ -943,9 +949,9 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migrator)) {
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
 
-	m.taskProgress.Total = len(m.IndexPairMap)
+	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
 	for _, indexFilePair := range m.IndexFilePairMap {
-		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES)
+		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexFilePair(indexFilePair).
 			WithScrollSize(m.ScrollSize).
 			WithScrollTime(m.ScrollTime).
@@ -958,7 +964,7 @@ func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migr
 
 		pool.Submit(func() {
 			callback(newMigrator)
-			m.taskProgress.Current.Add(1)
+			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()

@@ -7,12 +7,11 @@ import (
 	"github.com/samber/lo"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"sync/atomic"
 )
 
 var logger *log.Logger
 
-type progressCallBackType func(ctx context.Context, jobId string, taskProgress *Progress, sourceProgress *Progress, targetProgress *Progress)
+type progressCallBackType func(ctx context.Context)
 
 var progressCallBack progressCallBackType
 
@@ -39,16 +38,6 @@ func InitLogger(cfg *config.Config, callback progressCallBackType) {
 	progressCallBack = callback
 }
 
-type Progress struct {
-	Total   uint64
-	Current atomic.Uint64
-}
-
-//type Progress struct {
-//	TotalCount   uint64
-//	CurrentCount atomic.Int32
-//}
-
 func GetTaskLoggerProgress(ctx context.Context, sourceProgress *Progress, targetProgress *Progress) *log.Entry {
 	entry := GetTaskLogger(ctx)
 
@@ -60,11 +49,9 @@ func GetTaskLoggerProgress(ctx context.Context, sourceProgress *Progress, target
 		entry = entry.WithField("targetProgress", fmt.Sprintf("%d/%d", targetProgress.Current, targetProgress.Total))
 	}
 
-	taskProgress := GetCtxKeyTaskProgress(ctx)
 	GoRecovery(ctx, func() {
 		if progressCallBack != nil {
-			jobId := GetCtxKeyTaskID(ctx)
-			progressCallBack(ctx, jobId, taskProgress, sourceProgress, targetProgress)
+			progressCallBack(ctx)
 		}
 	})
 

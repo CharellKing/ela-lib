@@ -16,9 +16,10 @@ type Task struct {
 	bulkMigrator *BulkMigrator
 	force        bool
 	showProgress bool
+	isCancelled  *bool
 }
 
-func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targetES es.ES) *Task {
+func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targetES es.ES, isCancelled *bool) *Task {
 	taskId := uuid.New().String()
 
 	if lo.IsNotEmpty(sourceES) {
@@ -33,7 +34,7 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 	ctx = utils.SetCtxKeyTaskID(ctx, taskId)
 	ctx = utils.SetCtxKeyTaskAction(ctx, string(taskCfg.TaskAction))
 
-	bulkMigrator := NewBulkMigratorWithES(ctx, sourceES, targetES)
+	bulkMigrator := NewBulkMigratorWithES(ctx, sourceES, targetES, isCancelled)
 	bulkMigrator = bulkMigrator.WithIndexPairs(taskCfg.IndexPairs...).
 		WithParallelism(taskCfg.Parallelism).
 		WithScrollSize(taskCfg.ScrollSize).
@@ -54,6 +55,7 @@ func NewTaskWithES(ctx context.Context, taskCfg *config.TaskCfg, sourceES, targe
 	return &Task{
 		bulkMigrator: bulkMigrator,
 		force:        taskCfg.Force,
+		isCancelled:  isCancelled,
 	}
 }
 
@@ -74,7 +76,7 @@ func NewTask(ctx context.Context, taskCfg *config.TaskCfg, cfg *config.Config) (
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	return NewTaskWithES(ctx, taskCfg, sourceES, targetES), nil
+	return NewTaskWithES(ctx, taskCfg, sourceES, targetES, lo.ToPtr(false)), nil
 }
 
 func (t *Task) GetCtx() context.Context {

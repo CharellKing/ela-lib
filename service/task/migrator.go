@@ -66,6 +66,14 @@ type Migrator struct {
 	Ids []string
 
 	Query string
+
+	sourceIndexPairProgress *utils.Progress
+	targetIndexPairProgress *utils.Progress
+
+	sourceQueueExtrusion *utils.Progress
+	targetQueueExtrusion *utils.Progress
+
+	isCancelled *bool
 }
 
 func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstConfig *config.ESConfig) (*Migrator, error) {
@@ -79,10 +87,10 @@ func NewMigratorWithConfig(ctx context.Context, srcConfig *config.ESConfig, dstC
 		return nil, errors.WithStack(err)
 	}
 
-	return NewMigrator(ctx, srcES, dstES), nil
+	return NewMigrator(ctx, srcES, dstES, lo.ToPtr(false)), nil
 }
 
-func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
+func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES, isCancelled *bool) *Migrator {
 	if lo.IsNotEmpty(srcES) {
 		ctx = utils.SetCtxKeySourceESVersion(ctx, srcES.GetClusterVersion())
 	}
@@ -90,6 +98,20 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
 	if lo.IsNotEmpty(dstES) {
 		ctx = utils.SetCtxKeyTargetESVersion(ctx, dstES.GetClusterVersion())
 	}
+
+	sourceIndexPairProgress := utils.NewProgress("", 0)
+
+	ctx = utils.SetCtxKeySourceIndexPairProgress(ctx, sourceIndexPairProgress)
+
+	targetIndexPairProgress := utils.NewProgress("", 0)
+	ctx = utils.SetCtxKeyTargetIndexPairProgress(ctx, targetIndexPairProgress)
+
+	sourceQueueExtrusion := utils.NewExtrusion("", defaultBufferCount)
+
+	ctx = utils.SetCtxKeySourceQueueExtrusion(ctx, sourceQueueExtrusion)
+
+	targetQueueExtrusion := utils.NewExtrusion("", defaultBufferCount)
+	ctx = utils.SetCtxKeyTargetQueueExtrusion(ctx, targetQueueExtrusion)
 
 	return &Migrator{
 		err:               nil,
@@ -102,6 +124,14 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES) *Migrator {
 		BufferCount:       defaultBufferCount,
 		ActionParallelism: defaultActionParallelism,
 		ActionSize:        defaultActionSize,
+
+		sourceIndexPairProgress: sourceIndexPairProgress,
+		targetIndexPairProgress: targetIndexPairProgress,
+
+		sourceQueueExtrusion: sourceQueueExtrusion,
+		targetQueueExtrusion: targetQueueExtrusion,
+
+		isCancelled: isCancelled,
 	}
 }
 
@@ -659,13 +689,15 @@ func (m *Migrator) compare() (*DiffResult, error) {
 	queryMap := m.getQueryMap(ctx)
 
 	sourceDocCh, sourceTotal := m.search(ctx, m.SourceES, m.IndexPair.SourceIndex, queryMap, keywordFields, errCh, true)
+	m.sourceIndexPairProgress.Reset(utils.ProgressNameCompareSourceIndexPair, sourceTotal)
 
 	targetDocCh, targetTotal := m.search(ctx, m.TargetES, m.IndexPair.TargetIndex, queryMap, keywordFields, errCh, true)
+	m.targetIndexPairProgress.Reset(utils.ProgressNameCompareTargetIndexPair, targetTotal)
 
+	m.sourceQueueExtrusion.Reset(utils.ExtrusionNameCompareSourceIndexPair, cast.ToUint64(m.BufferCount))
+	m.targetQueueExtrusion.Reset(utils.ExtrusionNameCompareTargetIndexPair, cast.ToUint64(m.BufferCount))
 	var (
-		sourceCount atomic.Uint64
-		targetCount atomic.Uint64
-		diffResult  DiffResult
+		diffResult DiffResult
 	)
 
 	sourceDocHashMap := skipmap.NewString()
@@ -691,29 +723,30 @@ func (m *Migrator) compare() (*DiffResult, error) {
 				sourceResult, sourceOk = <-sourceDocCh
 				targetResult, targetOk = <-targetDocCh
 
+				m.sourceQueueExtrusion.Set(cast.ToUint64(len(sourceDocCh)))
+				m.targetQueueExtrusion.Set(cast.ToUint64(len(targetDocCh)))
+
 				if !sourceOk && !targetOk {
 					break
 				}
 
+				if *m.isCancelled {
+					break
+				}
+
 				if sourceResult != nil {
-					sourceCount.Add(1)
+					m.sourceIndexPairProgress.Increment(1)
 					sourceDocHashMap.Store(sourceResult.ID, sourceResult.Hash)
 				}
 
 				if targetResult != nil {
-					targetCount.Add(1)
+					m.targetIndexPairProgress.Increment(1)
 					targetDocHashMap.Store(targetResult.ID, targetResult.Hash)
 				}
 
 				if time.Now().Sub(lastPrintTime) > everyLogTime {
-					sourceCountValue := sourceCount.Load()
-					targetCountValue := targetCount.Load()
-					sourceProgress := cast.ToFloat32(sourceCountValue) / cast.ToFloat32(sourceTotal)
-					targetProgress := cast.ToFloat32(targetCountValue) / cast.ToFloat32(targetTotal)
-					utils.GetTaskLogger(m.GetCtx()).Infof("compare source progress %.4f (%d, %d, %d), "+
-						"target progress %.4f (%d, %d, %d)",
-						sourceProgress, sourceCountValue, sourceTotal, len(sourceDocCh),
-						targetProgress, targetCountValue, targetTotal, len(targetDocCh))
+					// TODO::
+					utils.GetTaskLogger(m.GetCtx()).Infof("compare target progress")
 					lastPrintTime = time.Now()
 				}
 
@@ -909,6 +942,10 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 				break
 			}
 
+			if *m.isCancelled {
+				break
+			}
+
 			scrollResult.Docs = lop.Map(scrollResult.Docs, func(doc *es2.Doc, _ int) *es2.Doc {
 				var fixErr error
 				doc, fixErr = es2.FixDoc(ctx, doc)
@@ -964,8 +1001,7 @@ func (m *Migrator) search(ctx context.Context, es es2.ES, index string, query ma
 	return docCh, total
 }
 
-func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, index string, total uint64, count *atomic.Uint64,
-	operation es2.Operation, errCh chan error) {
+func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, index string, operation es2.Operation, errCh chan error) {
 	var buf bytes.Buffer
 
 	lastPrintTime := time.Now()
@@ -974,14 +1010,19 @@ func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, 
 		if !ok {
 			break
 		}
-		v.Op = operation
-		count.Add(1)
-		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
 
+		if *m.isCancelled {
+			break
+		}
+
+		v.Op = operation
+		m.sourceIndexPairProgress.Increment(1)
+		m.sourceQueueExtrusion.Set(cast.ToUint64(len(docCh)))
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			utils.GetTaskLogger(ctx).
-				Infof("bulk progress %.4f (%d, %d, %d)",
-					percent, count.Load(), total, len(docCh))
+			// TODO::
+			//utils.GetTaskLogger(ctx).
+			//	Infof("bulk progress %.4f (%d, %d, %d)",
+			//		percent, count.Load(), total, len(docCh))
 			lastPrintTime = time.Now()
 		}
 		switch operation {
@@ -1009,7 +1050,7 @@ func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, 
 		}
 	}
 
-	if buf.Len() > 0 {
+	if buf.Len() > 0 && !*m.isCancelled {
 		if err := m.TargetES.Bulk(&buf); err != nil {
 			errCh <- errors.WithStack(err)
 		}
@@ -1029,31 +1070,29 @@ func (m *Migrator) getOperationTitle(operation es2.Operation) string {
 		return ""
 	}
 }
-func (m *Migrator) bulkWorker(ctx context.Context, docCh <-chan *es2.Doc, index string, total uint64, operation es2.Operation, errCh chan error) {
+func (m *Migrator) bulkWorker(ctx context.Context, docCh <-chan *es2.Doc, index string, operation es2.Operation, errCh chan error) {
 	var wg sync.WaitGroup
-	var count atomic.Uint64
 
 	if m.ActionParallelism <= 1 {
-		m.singleBulkWorker(ctx, docCh, index, total, &count, operation, errCh)
+		m.singleBulkWorker(ctx, docCh, index, operation, errCh)
 	}
 
 	wg.Add(cast.ToInt(m.ActionParallelism))
-	for i := 0; i < cast.ToInt(m.ActionParallelism); i++ {
+	for i := 0; i < cast.ToInt(m.ActionParallelism) && !*m.isCancelled; i++ {
 		utils.GoRecovery(ctx, func() {
 			defer wg.Done()
-			m.singleBulkWorker(ctx, docCh, index, total, &count, operation, errCh)
+			m.singleBulkWorker(ctx, docCh, index, operation, errCh)
 		})
 	}
 
 	wg.Wait()
 
-	percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
-	utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
-		percent, count.Load(), total, len(docCh))
+	// TODO::
+	//utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
+	//	percent, count.Load(), total, len(docCh))
 }
 
-func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, total uint64, count *atomic.Uint64,
-	filepath string, errCh chan error) {
+func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, filepath string, errCh chan error) {
 	f, err := os.Create(filepath)
 	if err != nil {
 		errCh <- errors.WithStack(err)
@@ -1072,12 +1111,18 @@ func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc
 		if !ok {
 			break
 		}
-		count.Add(1)
-		percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
+
+		if *m.isCancelled {
+			break
+		}
+
+		m.sourceIndexPairProgress.Increment(1)
+		m.sourceQueueExtrusion.Set(cast.ToUint64(len(doc)))
 
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
-				percent, count.Load(), total, len(doc))
+			// TODO::
+			//utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
+			//	percent, count.Load(), total, len(doc))
 			lastPrintTime = time.Now()
 		}
 
@@ -1093,7 +1138,7 @@ func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc
 		}
 	}
 
-	if buf.Len() > 0 {
+	if buf.Len() > 0 && !*m.isCancelled {
 		if _, err := f.WriteString(buf.String()); err != nil {
 			errCh <- errors.WithStack(err)
 		}
@@ -1103,22 +1148,23 @@ func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc
 
 }
 
-func (m *Migrator) bulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, total uint64, files []string, errCh chan error) {
+func (m *Migrator) bulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, files []string, errCh chan error) {
 	var wg sync.WaitGroup
-	var count atomic.Uint64
 
 	wg.Add(len(files))
 	for _, file := range files {
 		utils.GoRecovery(ctx, func() {
 			defer wg.Done()
-			m.singleBulkFileWorker(ctx, doc, total, &count, file, errCh)
+			m.singleBulkFileWorker(ctx, doc, file, errCh)
 		})
+
+		if *m.isCancelled {
+			break
+		}
 	}
 	wg.Wait()
 
-	percent := cast.ToFloat32(count.Load()) / cast.ToFloat32(total)
-	utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
-		percent, count.Load(), total, len(doc))
+	// TODO::
 }
 
 func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{}, operation es2.Operation) error {
@@ -1131,10 +1177,14 @@ func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{},
 	)
 	if operation == es2.OperationDelete {
 		docCh, total = m.search(ctx, m.TargetES, m.IndexPair.SourceIndex, query, nil, errCh, false)
+		m.sourceIndexPairProgress.Reset(utils.ProgressNameDeleteSourceIndexPair, total)
+		m.sourceQueueExtrusion.Reset(utils.ExtrusionNameDeleteTargetIndexPair, cast.ToUint64(m.BufferCount))
 	} else {
 		docCh, total = m.search(ctx, m.SourceES, m.IndexPair.SourceIndex, query, nil, errCh, false)
+		m.sourceIndexPairProgress.Reset(utils.ProgressNameUpsertSourceIndexPair, total)
+		m.sourceQueueExtrusion.Reset(utils.ExtrusionNameUpsertTargetIndexPair, cast.ToUint64(m.BufferCount))
 	}
-	m.bulkWorker(ctx, docCh, m.IndexPair.TargetIndex, total, operation, errCh)
+	m.bulkWorker(ctx, docCh, m.IndexPair.TargetIndex, operation, errCh)
 	close(errCh)
 	errs := <-errsCh
 	return errs.Ret()
@@ -1408,7 +1458,10 @@ func (m *Migrator) Import(force bool) error {
 	)
 
 	docCh = m.scrollFile(ctx, indexFileSetting, errCh)
-	m.bulkWorker(ctx, docCh, m.IndexFilePair.Index, indexFileSetting.Total, es2.OperationCreate, errCh)
+	m.sourceIndexPairProgress.Reset(utils.ProgressNameImportSourceIndexPair, indexFileSetting.Total)
+	m.sourceQueueExtrusion.Reset(utils.ExtrusionNameImportSourceIndexPair, cast.ToUint64(m.BufferCount))
+
+	m.bulkWorker(ctx, docCh, m.IndexFilePair.Index, es2.OperationCreate, errCh)
 	close(errCh)
 	errs := <-errsCh
 	return errs.Ret()
@@ -1495,8 +1548,10 @@ func (m *Migrator) export(ctx context.Context) error {
 
 	query := m.getQueryMap(ctx)
 	docCh, total = m.search(ctx, m.SourceES, m.IndexFilePair.Index, query, nil, errCh, false)
+	m.sourceIndexPairProgress.Reset(utils.ProgressNameExportSourceIndexPair, total)
+	m.sourceQueueExtrusion.Reset(utils.ExtrusionNameExportSourceIndexPair, cast.ToUint64(m.BufferCount))
 
-	m.bulkFileWorker(ctx, docCh, total, indexFileSetting.Files, errCh)
+	m.bulkFileWorker(ctx, docCh, indexFileSetting.Files, errCh)
 	close(errCh)
 	errs := <-errsCh
 	return errs.Ret()

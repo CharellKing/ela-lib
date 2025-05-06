@@ -25,7 +25,7 @@ func TestGatewayServer(t *testing.T) {
 		return
 	}
 
-	utils.InitLogger(&cfg)
+	utils.InitLogger(&cfg, nil)
 	ctx := context.Background()
 	esProxy, err := NewESGateway(&cfg)
 	if err != nil {

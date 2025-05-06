@@ -14,6 +14,7 @@ type TaskMgr struct {
 	usedESMap         map[string]es.ES
 	taskCfgs          []*config.TaskCfg
 	ignoreSystemIndex bool
+	isCancelled       *bool
 }
 
 func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
@@ -41,6 +42,7 @@ func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
 		usedESMap:         usedESMap,
 		taskCfgs:          cfg.Tasks,
 		ignoreSystemIndex: cfg.IgnoreSystemIndex,
+		isCancelled:       lo.ToPtr(false),
 	}, nil
 }
 
@@ -51,13 +53,17 @@ func (t *TaskMgr) Run(ctx context.Context, taskNames ...string) error {
 		if len(taskNames) > 0 && !lo.Contains(taskNames, taskCfg.Name) {
 			continue
 		}
-		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES])
+		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES], t.isCancelled)
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
 		}
 
 		utils.GetTaskLogger(task.GetCtx()).Debug("task done")
 		utils.GetTaskLogger(task.GetCtx()).Infof("tasks progress %0.4f (%d, %d)", float64(idx+1)/float64(len(t.taskCfgs)), idx+1, len(t.taskCfgs))
+
+		if *t.isCancelled {
+			break
+		}
 	}
 
 	return nil
