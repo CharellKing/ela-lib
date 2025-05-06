@@ -14,7 +14,7 @@ const (
 
 type TaskCfg struct {
 	Name              string           `mapstructure:"name"`
-	IndexPattern      *string          `mapstructure:"index_pattern"`
+	IndexPattern      []string          `mapstructure:"index_pattern"`
 	SourceES          string           `mapstructure:"source_es"`
 	TargetES          string           `mapstructure:"target_es"`
 	IndexPairs        []*IndexPair     `mapstructure:"index_pairs"`

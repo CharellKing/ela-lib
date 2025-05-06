@@ -47,7 +47,7 @@ type BulkMigrator struct {
 
 	Ids []string
 
-	Pattern string
+	Patterns []string
 
 	IndexFileRoot string
 
@@ -130,7 +130,7 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -171,7 +171,7 @@ func (m *BulkMigrator) WithIndexFilePairs(indexFilePairs ...*config.IndexFilePai
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		Query:             m.Query,
@@ -211,7 +211,7 @@ func (m *BulkMigrator) WithIndexTemplates(indexTemplates ...*config.IndexTemplat
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -251,7 +251,7 @@ func (m *BulkMigrator) WithIndexFileRoot(indexFileRoot string) *BulkMigrator {
 		ActionSize:        m.ActionSize,
 		Ids:               m.Ids,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     indexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -285,7 +285,7 @@ func (m *BulkMigrator) WithScrollSize(scrollSize uint) *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -316,7 +316,7 @@ func (m *BulkMigrator) WithScrollTime(scrollTime uint) *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -347,7 +347,7 @@ func (m *BulkMigrator) WithSliceSize(sliceSize uint) *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -378,7 +378,7 @@ func (m *BulkMigrator) WithBufferCount(bufferCount uint) *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -410,7 +410,7 @@ func (m *BulkMigrator) WithActionParallelism(actionParallelism uint) *BulkMigrat
 		Ids:               m.Ids,
 		ActionParallelism: actionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -442,7 +442,7 @@ func (m *BulkMigrator) WithActionSize(actionSize uint) *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -450,8 +450,8 @@ func (m *BulkMigrator) WithActionSize(actionSize uint) *BulkMigrator {
 	}
 }
 
-func (m *BulkMigrator) filterIndexes(pattern string) ([]string, error) {
-	if lo.IsEmpty(pattern) {
+func (m *BulkMigrator) filterIndexes(patterns []string) ([]string, error) {
+	if len(patterns) <= 0 {
 		return nil, nil
 	}
 	ignoreSystemIndex := utils.GetCtxKeyIgnoreSystemIndex(m.ctx)
@@ -467,19 +467,26 @@ func (m *BulkMigrator) filterIndexes(pattern string) ([]string, error) {
 			continue
 		}
 
-		ok, err := regexp.Match(pattern, []byte(index))
-		if err != nil {
-			return nil, errors.WithStack(err)
+		isOk := false
+		for _, pattern := range patterns {
+			isOk, err = regexp.Match(pattern, []byte(index))
+			if err != nil {
+				continue
+			}
+
+			if isOk {
+				break
+			}
 		}
 
-		if ok {
+		if isOk {
 			filteredIndexes = append(filteredIndexes, index)
 		}
 	}
 	return filteredIndexes, nil
 }
 
-func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
+func (m *BulkMigrator) WithPatternIndexes(patterns []string) *BulkMigrator {
 	if m.Error != nil {
 		return m
 	}
@@ -499,7 +506,7 @@ func (m *BulkMigrator) WithPatternIndexes(pattern string) *BulkMigrator {
 		ActionSize:        m.ActionSize,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           pattern,
+		Patterns:          patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -532,7 +539,7 @@ func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
 		ActionSize:        m.ActionSize,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -560,7 +567,7 @@ func (m *BulkMigrator) WithIds(ids []string) *BulkMigrator {
 		Ids:               ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -584,7 +591,7 @@ func (m *BulkMigrator) WithQuery(query string) *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -608,7 +615,7 @@ func (m *BulkMigrator) clone() *BulkMigrator {
 		Ids:               m.Ids,
 		ActionParallelism: m.ActionParallelism,
 		IndexFilePairMap:  m.IndexFilePairMap,
-		Pattern:           m.Pattern,
+		Patterns:          m.Patterns,
 		IndexFileRoot:     m.IndexFileRoot,
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
@@ -745,7 +752,7 @@ func (m *BulkMigrator) getIndexPairsFromPattern() *BulkMigrator {
 	var newBulkMigrator = m.clone()
 	var filterIndexes []string
 
-	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Pattern)
+	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Patterns)
 	if newBulkMigrator.Error != nil {
 		return newBulkMigrator
 	}
@@ -777,7 +784,7 @@ func (m *BulkMigrator) getIndexFilePairsFromPattern() *BulkMigrator {
 	var newBulkMigrator = m.clone()
 	var filterIndexes []string
 
-	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Pattern)
+	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Patterns)
 	if newBulkMigrator.Error != nil {
 		return newBulkMigrator
 	}
@@ -808,7 +815,7 @@ func (m *BulkMigrator) getIndexFilePairFromPattern() *BulkMigrator {
 	var newBulkMigrator = m.clone()
 	var filterIndexes []string
 
-	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Pattern)
+	filterIndexes, newBulkMigrator.Error = m.filterIndexes(m.Patterns)
 	if newBulkMigrator.Error != nil {
 		return newBulkMigrator
 	}
@@ -869,14 +876,20 @@ func (m *BulkMigrator) getIndexFilePairFromIndexFileRoot() *BulkMigrator {
 		}
 
 		index := cast.ToString(settingFileMap["index"])
-		if lo.IsNotEmpty(m.Pattern) {
-			ok, err := regexp.Match(m.Pattern, []byte(index))
-			if err != nil {
-				newBulkMigrator.Error = errors.WithStack(err)
-				return newBulkMigrator
+		if len(m.Patterns) > 0 {
+			isOk := false
+			for _, pattern := range m.Patterns {
+				isOk, err = regexp.Match(pattern, []byte(index))
+				if err != nil {
+					continue
+				}
+
+				if isOk {
+					break
+				}
 			}
 
-			if !ok {
+			if !isOk {
 				continue
 			}
 		}
