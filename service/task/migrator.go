@@ -745,7 +745,6 @@ func (m *Migrator) compare() (*DiffResult, error) {
 				}
 
 				if time.Now().Sub(lastPrintTime) > everyLogTime {
-					// TODO::
 					utils.GetTaskLogger(m.GetCtx()).Infof("compare target progress")
 					lastPrintTime = time.Now()
 				}
@@ -1019,10 +1018,7 @@ func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, 
 		m.sourceIndexPairProgress.Increment(1)
 		m.sourceQueueExtrusion.Set(cast.ToUint64(len(docCh)))
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			// TODO::
-			//utils.GetTaskLogger(ctx).
-			//	Infof("bulk progress %.4f (%d, %d, %d)",
-			//		percent, count.Load(), total, len(docCh))
+			utils.GetTaskLogger(ctx).Info("single slice bulk worker")
 			lastPrintTime = time.Now()
 		}
 		switch operation {
@@ -1087,9 +1083,7 @@ func (m *Migrator) bulkWorker(ctx context.Context, docCh <-chan *es2.Doc, index 
 
 	wg.Wait()
 
-	// TODO::
-	//utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
-	//	percent, count.Load(), total, len(docCh))
+	utils.GetTaskLogger(ctx).Info("bulk worker")
 }
 
 func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, filepath string, errCh chan error) {
@@ -1120,9 +1114,7 @@ func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc
 		m.sourceQueueExtrusion.Set(cast.ToUint64(len(doc)))
 
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			// TODO::
-			//utils.GetTaskLogger(ctx).Infof("bulk progress %.4f (%d, %d, %d)",
-			//	percent, count.Load(), total, len(doc))
+			utils.GetTaskLogger(ctx).Info("single slice bulk worker")
 			lastPrintTime = time.Now()
 		}
 
@@ -1165,6 +1157,7 @@ func (m *Migrator) bulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, file
 	wg.Wait()
 
 	// TODO::
+	utils.GetTaskLogger(ctx).Info("bulk file worker finish")
 }
 
 func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{}, operation es2.Operation) error {
