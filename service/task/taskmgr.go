@@ -49,7 +49,7 @@ func NewTaskMgr(cfg *config.Config) (*TaskMgr, error) {
 func (t *TaskMgr) Run(ctx context.Context, taskNames ...string) error {
 	ctx = utils.SetCtxKeyIgnoreSystemIndex(ctx, t.ignoreSystemIndex)
 
-	for idx, taskCfg := range t.taskCfgs {
+	for _, taskCfg := range t.taskCfgs {
 		if len(taskNames) > 0 && !lo.Contains(taskNames, taskCfg.Name) {
 			continue
 		}
@@ -57,9 +57,6 @@ func (t *TaskMgr) Run(ctx context.Context, taskNames ...string) error {
 		if err := task.Run(); err != nil {
 			return errors.WithStack(err)
 		}
-
-		utils.GetTaskLogger(task.GetCtx()).Debug("task done")
-		utils.GetTaskLogger(task.GetCtx()).Infof("tasks progress %0.4f (%d, %d)", float64(idx+1)/float64(len(t.taskCfgs)), idx+1, len(t.taskCfgs))
 
 		if *t.isCancelled {
 			break

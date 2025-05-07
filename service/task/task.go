@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"strings"
 )
 
 type Task struct {
@@ -115,63 +114,48 @@ func (t *Task) CreateTemplate() error {
 	return t.bulkMigrator.CreateTemplates()
 }
 
-func (t *Task) Run() error {
+func (t *Task) Run() (map[string]*DiffResult, error) {
 	ctx := t.GetCtx()
 	taskAction := config.TaskAction(utils.GetCtxKeyTaskAction(ctx))
 	switch taskAction {
 	case config.TaskActionCopyIndex:
-		return t.CopyIndexSettings()
+		if err := t.CopyIndexSettings(); err != nil {
+			return nil, errors.WithStack(err)
+		}
 	case config.TaskActionSync:
-		return t.Sync()
+		if err := t.Sync(); err != nil {
+			return nil, errors.WithStack(err)
+		}
 	case config.TaskActionSyncDiff:
 		diffResultMap, err := t.SyncDiff()
 		if err != nil {
-			return errors.WithStack(err)
+			return diffResultMap, errors.WithStack(err)
 		}
 
-		for indexes, diffResult := range diffResultMap {
-			indexArray := strings.Split(indexes, ":")
-			utils.GetTaskLogger(t.GetCtx()).
-				WithField("sourceIndex", indexArray[0]).
-				WithField("targetIndex", indexArray[1]).
-				WithField("percent", diffResult.Percent()).
-				WithField("create", diffResult.CreateCount.Load()).
-				WithField("update", diffResult.UpdateCount.Load()).
-				WithField("delete", diffResult.DeleteCount.Load()).
-				WithField("createDocs", diffResult.CreateDocs).
-				WithField("updateDocs", diffResult.UpdateDocs).
-				WithField("deleteDocs", diffResult.DeleteDocs).
-				Info("difference")
-		}
 	case config.TaskActionCompare:
 		diffResultMap, err := t.bulkMigrator.Compare()
 		if err != nil {
-			return errors.WithStack(err)
+			return diffResultMap, errors.WithStack(err)
 		}
-
-		for indexes, diffResult := range diffResultMap {
-			indexArray := strings.Split(indexes, ":")
-			utils.GetTaskLogger(t.GetCtx()).
-				WithField("sourceIndex", indexArray[0]).
-				WithField("targetIndex", indexArray[1]).
-				WithField("percent", diffResult.Percent()).
-				WithField("create", diffResult.CreateCount.Load()).
-				WithField("update", diffResult.UpdateCount.Load()).
-				WithField("delete", diffResult.DeleteCount.Load()).
-				WithField("createDocs", diffResult.CreateDocs).
-				WithField("updateDocs", diffResult.UpdateDocs).
-				WithField("deleteDocs", diffResult.DeleteDocs).
-				Info("difference")
-		}
+		return diffResultMap, nil
 	case config.TaskActionImport:
-		return t.Import()
+		if err := t.Import(); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		return nil, nil
 	case config.TaskActionExport:
-		return t.Export()
+		if err := t.Export(); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		return nil, nil
 	case config.TaskActionTemplate:
-		return t.CreateTemplate()
+		if err := t.CreateTemplate(); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		return nil, nil
 	default:
 		taskName := utils.GetCtxKeyTaskName(ctx)
-		return fmt.Errorf("%s invalid task action %s", taskName, taskAction)
+		return nil, fmt.Errorf("%s invalid task action %s", taskName, taskAction)
 	}
-	return nil
+	return nil, nil
 }

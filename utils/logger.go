@@ -11,11 +11,7 @@ import (
 
 var logger *log.Logger
 
-type progressCallBackType func(ctx context.Context)
-
-var progressCallBack progressCallBackType
-
-func InitLogger(cfg *config.Config, callback progressCallBackType) {
+func InitLogger(cfg *config.Config) {
 	levelMap := map[string]log.Level{
 		"debug": log.DebugLevel,
 		"info":  log.InfoLevel,
@@ -34,28 +30,6 @@ func InitLogger(cfg *config.Config, callback progressCallBackType) {
 		Level:     level,
 	}
 	logger.SetReportCaller(true)
-
-	progressCallBack = callback
-}
-
-func GetTaskLoggerProgress(ctx context.Context, sourceProgress *Progress, targetProgress *Progress) *log.Entry {
-	entry := GetTaskLogger(ctx)
-
-	if sourceProgress != nil {
-		entry = entry.WithField("sourceProgress", fmt.Sprintf("%d/%d", sourceProgress.Current, sourceProgress.Total))
-	}
-
-	if targetProgress != nil {
-		entry = entry.WithField("targetProgress", fmt.Sprintf("%d/%d", targetProgress.Current, targetProgress.Total))
-	}
-
-	GoRecovery(ctx, func() {
-		if progressCallBack != nil {
-			progressCallBack(ctx)
-		}
-	})
-
-	return entry
 }
 
 func GetTaskLogger(ctx context.Context) *log.Entry {

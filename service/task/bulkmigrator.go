@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 type BulkMigrator struct {
@@ -56,6 +57,9 @@ type BulkMigrator struct {
 	taskProgress *utils.Progress
 
 	isCancelled *bool
+
+	successCount atomic.Uint64
+	failedCount  atomic.Uint64
 }
 
 func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES, isCancelled *bool) *BulkMigrator {
@@ -629,11 +633,14 @@ func (m *BulkMigrator) Sync(force bool) error {
 		return errors.WithStack(newBulkMigrator.Error)
 	}
 
-	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+	if err := newBulkMigrator.parallelRun(func(migrator *Migrator) error {
 		if err := migrator.Sync(force); err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("sync %+v", err)
+			return errors.WithStack(err)
 		}
-	})
+		return nil
+	}); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
@@ -644,7 +651,7 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 	}
 
 	var diffMap sync.Map
-	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+	err := newBulkMigrator.parallelRun(func(migrator *Migrator) error {
 		diffResult, err := migrator.SyncDiff()
 		if utils.IsCustomError(err, utils.NonIndexExisted) {
 			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), &DiffResult{
@@ -653,19 +660,15 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 				UpdateCount: *utils.ZeroAtomicUint64(),
 				DeleteCount: *utils.ZeroAtomicUint64(),
 			})
-			utils.GetTaskLogger(migrator.GetCtx()).Warn("target has no index")
-			return
 		}
 
 		if err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("syncDiff %+v", err)
-			return
+			return errors.WithStack(err)
 		}
 		if diffResult.HasDiff() {
 			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), diffResult)
-		} else {
-			utils.GetTaskLogger(migrator.GetCtx()).Info("no difference")
 		}
+		return nil
 	})
 
 	result := make(map[string]*DiffResult)
@@ -675,7 +678,7 @@ func (m *BulkMigrator) SyncDiff() (map[string]*DiffResult, error) {
 		return true
 	})
 
-	return result, nil
+	return result, errors.WithStack(err)
 }
 
 func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
@@ -686,7 +689,7 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 
 	var diffMap sync.Map
 
-	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+	err := newBulkMigrator.parallelRun(func(migrator *Migrator) error {
 		diffResult, err := migrator.Compare()
 		if utils.IsCustomError(err, utils.NonIndexExisted) {
 			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), &DiffResult{
@@ -695,19 +698,16 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 				UpdateCount: *utils.ZeroAtomicUint64(),
 				DeleteCount: *utils.ZeroAtomicUint64(),
 			})
-			utils.GetTaskLogger(migrator.GetCtx()).Warn("target has no index")
-			return
+			return nil
 		}
 
 		if err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("compare %+v", err)
-			return
+			return errors.WithStack(err)
 		}
 		if diffResult.HasDiff() {
 			diffMap.Store(newBulkMigrator.getIndexPairKey(migrator.IndexPair), diffResult)
-		} else {
-			utils.GetTaskLogger(migrator.GetCtx()).Info("no difference")
 		}
+		return nil
 	})
 
 	result := make(map[string]*DiffResult)
@@ -718,7 +718,7 @@ func (m *BulkMigrator) Compare() (map[string]*DiffResult, error) {
 		return true
 	})
 
-	return result, nil
+	return result, errors.WithStack(err)
 }
 
 func (m *BulkMigrator) CopyIndexSettings(force bool) error {
@@ -727,20 +727,26 @@ func (m *BulkMigrator) CopyIndexSettings(force bool) error {
 		return errors.WithStack(newBulkMigrator.Error)
 	}
 
-	newBulkMigrator.parallelRun(func(migrator *Migrator) {
+	if err := newBulkMigrator.parallelRun(func(migrator *Migrator) error {
 		if err := migrator.CopyIndexSettings(force); err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("copyIndexSettings %+v", err)
+			return errors.WithStack(err)
 		}
-	})
+		return nil
+	}); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
 func (m *BulkMigrator) CreateTemplates() error {
-	m.parallelRunWithIndexTemplate(func(migrator *Migrator) {
+	if err := m.parallelRunWithIndexTemplate(func(migrator *Migrator) error {
 		if err := migrator.CreateTemplate(); err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("createTemplate %+v", err)
+			return errors.WithStack(err)
 		}
-	})
+		return nil
+	}); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
@@ -909,9 +915,10 @@ func (m *BulkMigrator) getIndexFilePairFromIndexFileRoot() *BulkMigrator {
 	return newBulkMigrator
 }
 
-func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
+func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator) error) error {
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
 	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
+	var errs utils.Errs
 	for _, indexPair := range m.IndexPairMap {
 		if *m.isCancelled {
 			break
@@ -928,17 +935,27 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator)) {
 			WithQuery(m.Query)
 
 		pool.Submit(func() {
-			callback(newMigrator)
+			err := callback(newMigrator)
+			if err != nil {
+				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
+				m.failedCount.Add(1)
+				errs.Add(err)
+			} else {
+				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
+				m.successCount.Add(1)
+			}
 			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
+	return errs.Ret()
 }
 
-func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migrator)) {
+func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migrator) error) error {
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
 
 	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
+	var errs utils.Errs
 	for _, indexTemplate := range m.IndexTemplates {
 		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexTemplate(*indexTemplate).
@@ -952,17 +969,27 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 			WithQuery(m.Query)
 
 		pool.Submit(func() {
-			callback(newMigrator)
+			err := callback(newMigrator)
+			if err != nil {
+				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
+				errs.Add(err)
+				m.failedCount.Add(1)
+			} else {
+				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
+				m.successCount.Add(1)
+			}
 			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
+	return errs.Ret()
 }
 
-func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migrator)) {
+func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migrator) error) error {
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
 
 	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
+	var errs utils.Errs
 	for _, indexFilePair := range m.IndexFilePairMap {
 		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexFilePair(indexFilePair).
@@ -976,11 +1003,20 @@ func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migr
 			WithQuery(m.Query)
 
 		pool.Submit(func() {
-			callback(newMigrator)
+			err := callback(newMigrator)
+			if err != nil {
+				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
+				errs.Add(err)
+				m.failedCount.Add(1)
+			} else {
+				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
+				m.successCount.Add(1)
+			}
 			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
+	return errs.Ret()
 }
 
 func (m *BulkMigrator) Import(force bool) error {
@@ -989,11 +1025,14 @@ func (m *BulkMigrator) Import(force bool) error {
 		return errors.WithStack(newBulkMigrator.Error)
 	}
 
-	newBulkMigrator.parallelRunWithIndexFilePair(func(migrator *Migrator) {
+	if err := newBulkMigrator.parallelRunWithIndexFilePair(func(migrator *Migrator) error {
 		if err := migrator.Import(force); err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("import %+v", err)
+			return errors.WithStack(err)
 		}
-	})
+		return nil
+	}); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
@@ -1003,10 +1042,14 @@ func (m *BulkMigrator) Export() error {
 		return errors.WithStack(newBulkMigrator.Error)
 	}
 
-	newBulkMigrator.parallelRunWithIndexFilePair(func(migrator *Migrator) {
+	err := newBulkMigrator.parallelRunWithIndexFilePair(func(migrator *Migrator) error {
 		if err := migrator.Export(); err != nil {
-			utils.GetTaskLogger(migrator.GetCtx()).Errorf("export %+v", err)
+			return errors.WithStack(err)
 		}
+		return nil
 	})
+	if err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }

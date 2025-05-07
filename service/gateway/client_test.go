@@ -26,7 +26,7 @@ func TestClusterHealth(t *testing.T) {
 		return
 	}
 
-	utils.InitLogger(&cfg, nil)
+	utils.InitLogger(&cfg)
 	ctx := context.Background()
 	v0 := es.NewESV0(cfg.ESConfigs["es5"])
 	esInstance, err := v0.GetES()

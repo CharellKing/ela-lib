@@ -1,6 +1,10 @@
 package utils
 
-import "sync/atomic"
+import (
+	"context"
+	"sync/atomic"
+	"time"
+)
 
 type ProgressType string
 
@@ -24,11 +28,33 @@ const (
 	ProgressTypeQueueExtrusion ProgressType = "extrusion"
 )
 
+type ProgressStatus string
+
+const (
+	ProgressStatusRunning   ProgressStatus = "running"
+	ProgressStatusFinished  ProgressStatus = "finished"
+	ProgressStatusFailed    ProgressStatus = "failed"
+	ProgressStatusCancelled ProgressStatus = "cancelled"
+)
+
 type Progress struct {
 	Name    string
 	Type    ProgressType
 	Total   uint64
 	Current atomic.Uint64
+
+	StartTime int64
+	EndTime   int64
+
+	Status ProgressStatus
+}
+
+type HookCallBack func(ctx context.Context, progress *Progress)
+
+var progressCallBack HookCallBack
+
+func RegisterProgressCallBack(cb HookCallBack) {
+	progressCallBack = cb
 }
 
 func NewProgress(name string, total uint64) *Progress {
@@ -37,6 +63,8 @@ func NewProgress(name string, total uint64) *Progress {
 		Type:    ProgressTypeProgress,
 		Total:   total,
 		Current: atomic.Uint64{},
+
+		StartTime: time.Now().UnixMilli(),
 	}
 }
 
@@ -46,6 +74,9 @@ func NewExtrusion(name string, total uint64) *Progress {
 		Type:    ProgressTypeQueueExtrusion,
 		Total:   total,
 		Current: atomic.Uint64{},
+
+		StartTime: time.Now().UnixMilli(),
+		Status:    ProgressStatusRunning,
 	}
 }
 
@@ -59,6 +90,9 @@ func (p *Progress) Reset(name string, total uint64) {
 	p.Name = name
 	p.Total = total
 	p.Current.Store(0)
+	p.StartTime = time.Now().UnixMilli()
+	p.Status = ProgressStatusRunning
+
 }
 
 func (p *Progress) Increment(delta uint64) {
@@ -69,6 +103,27 @@ func (p *Progress) Set(current uint64) {
 	p.Current.Store(current)
 }
 
-func (p *Progress) Finish() {
+func (p *Progress) Show(ctx context.Context) {
+	p.Status = ProgressStatusRunning
+	progressCallBack(ctx, p)
+}
+
+func (p *Progress) done(ctx context.Context, status ProgressStatus) {
+	p.EndTime = time.Now().UnixMilli()
+	p.Status = status
+}
+func (p *Progress) Finish(ctx context.Context) {
 	p.Current.Store(p.Total)
+	p.done(ctx, ProgressStatusFinished)
+	progressCallBack(ctx, p)
+}
+
+func (p *Progress) Fail(ctx context.Context) {
+	p.done(ctx, ProgressStatusFailed)
+	progressCallBack(ctx, p)
+}
+
+func (p *Progress) Cancel(ctx context.Context) {
+	p.done(ctx, ProgressStatusCancelled)
+	progressCallBack(ctx, p)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 	"io"
 	"net/http"
@@ -182,7 +183,7 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 	}
 	resp, statusCode, err := gateway.MasterES.Request(c, newBodyBytes, parseUriResult)
 	if err != nil {
-		utils.GetLogger(c).Infof("master request error: %+v", err)
+		log.Infof("master request error: %+v", err)
 		c.JSON(statusCode, gin.H{
 			"error": err.Error(),
 		})
@@ -192,17 +193,17 @@ func (gateway *ESGateway) onHandler(c *gin.Context) {
 		utils.GoRecovery(c, func() {
 			newBodyBytes, err := gateway.convertSalveRequestBody(bodyBytes, resp, parseUriResult)
 			if err != nil {
-				utils.GetLogger(c).Errorf("convert slave request body: %+v", err)
+				log.Errorf("convert slave request body: %+v", err)
 				return
 			}
 			newParseUriResult := gateway.convertSlaveMatchRule(resp, parseUriResult)
 			response, status, err := gateway.SlaveES.Request(c, newBodyBytes, newParseUriResult)
 			if err != nil {
-				utils.GetLogger(c).Errorf("slave request error: %+v", err)
+				log.Errorf("slave request error: %+v", err)
 			}
 
 			if status >= 299 {
-				utils.GetLogger(c).Errorf("response: %+v, err: %+v", response, err)
+				log.Errorf("response: %+v, err: %+v", response, err)
 			}
 		})
 	}

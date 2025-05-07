@@ -557,10 +557,7 @@ func (m *Migrator) mergeQueryMap(ids []string, subQueryMap map[string]interface{
 func (m *Migrator) getQueryMap(ctx context.Context) map[string]interface{} {
 	subQuery := make(map[string]interface{})
 	if lo.IsNotEmpty(m.Query) {
-		err := json.Unmarshal([]byte(m.Query), &subQuery)
-		if err != nil {
-			utils.GetTaskLogger(ctx).Warnf("parse query error: %+v", err)
-		}
+		_ = json.Unmarshal([]byte(m.Query), &subQuery)
 	}
 	return m.mergeQueryMap(m.Ids, subQuery)
 }
@@ -591,21 +588,18 @@ func (m *Migrator) SyncDiff() (*DiffResult, error) {
 	}
 
 	if len(diffResult.CreateDocs) > 0 {
-		utils.GetTaskLogger(ctx).Debugf("sync with create docs: %+v", len(diffResult.CreateDocs))
 		if err := m.syncUpsert(ctx, m.mergeQueryMap(diffResult.CreateDocs, nil), es2.OperationCreate); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
 
 	if len(diffResult.UpdateDocs) > 0 {
-		utils.GetTaskLogger(ctx).Debugf("sync with update docs: %+v", len(diffResult.UpdateDocs))
 		if err := m.syncUpsert(ctx, m.mergeQueryMap(diffResult.UpdateDocs, nil), es2.OperationUpdate); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
 	}
 
 	if len(diffResult.DeleteDocs) > 0 {
-		utils.GetTaskLogger(ctx).Debugf("sync with delete docs: %+v", len(diffResult.DeleteDocs))
 		if err := m.syncUpsert(ctx, m.mergeQueryMap(diffResult.DeleteDocs, nil), es2.OperationDelete); err != nil {
 			errs.Add(errors.WithStack(err))
 		}
@@ -745,7 +739,7 @@ func (m *Migrator) compare() (*DiffResult, error) {
 				}
 
 				if time.Now().Sub(lastPrintTime) > everyLogTime {
-					utils.GetTaskLogger(m.GetCtx()).Infof("compare target progress")
+					m.sourceIndexPairProgress.Show(ctx)
 					lastPrintTime = time.Now()
 				}
 
@@ -883,12 +877,8 @@ func (m *Migrator) Sync(force bool) error {
 		return errors.WithStack(err)
 	}
 
-	utils.GetTaskLogger(ctx).Debugf("sync with force: %+v", force)
-
 	if force {
-		if err := m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force); err != nil {
-			utils.GetTaskLogger(m.GetCtx()).Errorf("copy index settings %+v", err)
-		}
+		_ = m.copyIndexSettings(ctx, m.IndexPair.TargetIndex, force)
 	}
 	if err := m.syncUpsert(ctx, m.getQueryMap(ctx), es2.OperationCreate); err != nil {
 		return errors.WithStack(err)
@@ -908,9 +898,7 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 		defer func() {
 			wg.Done()
 			if scrollResult != nil {
-				if err := es.ClearScroll(scrollResult.ScrollId); err != nil {
-					utils.GetTaskLogger(ctx).Errorf("clear scroll %+v", err)
-				}
+				_ = es.ClearScroll(scrollResult.ScrollId)
 			}
 		}()
 
@@ -925,7 +913,6 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 			})
 
 			if err != nil {
-				utils.GetTaskLogger(ctx).Errorf("searchSingleSlice error: %+v", err)
 				errCh <- errors.WithStack(err)
 			}
 
@@ -937,7 +924,6 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 
 		for {
 			if scrollResult == nil || len(scrollResult.Docs) <= 0 {
-				utils.GetTaskLogger(ctx).Infof("scroll slice %d exit", lo.Ternary(sliceId != nil, *sliceId, 0))
 				break
 			}
 
@@ -962,7 +948,6 @@ func (m *Migrator) searchSingleSlice(ctx context.Context, wg *sync.WaitGroup, es
 			}
 
 			if scrollResult, err = es.NextScroll(ctx, scrollResult.ScrollId, m.ScrollTime); err != nil {
-				utils.GetTaskLogger(ctx).Errorf("searchSingleSlice error: %+v", err)
 				errCh <- errors.WithStack(err)
 			}
 		}
@@ -1018,7 +1003,7 @@ func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, 
 		m.sourceIndexPairProgress.Increment(1)
 		m.sourceQueueExtrusion.Set(cast.ToUint64(len(docCh)))
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			utils.GetTaskLogger(ctx).Info("single slice bulk worker")
+			m.sourceIndexPairProgress.Show(ctx)
 			lastPrintTime = time.Now()
 		}
 		switch operation {
@@ -1035,7 +1020,6 @@ func (m *Migrator) singleBulkWorker(ctx context.Context, docCh <-chan *es2.Doc, 
 				errCh <- errors.WithStack(err)
 			}
 		default:
-			utils.GetTaskLogger(ctx).Error("unknown operation")
 		}
 
 		if buf.Len() >= cast.ToInt(m.ActionSize)*1024*1024 {
@@ -1082,8 +1066,6 @@ func (m *Migrator) bulkWorker(ctx context.Context, docCh <-chan *es2.Doc, index 
 	}
 
 	wg.Wait()
-
-	utils.GetTaskLogger(ctx).Info("bulk worker")
 }
 
 func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, filepath string, errCh chan error) {
@@ -1114,7 +1096,7 @@ func (m *Migrator) singleBulkFileWorker(ctx context.Context, doc <-chan *es2.Doc
 		m.sourceQueueExtrusion.Set(cast.ToUint64(len(doc)))
 
 		if time.Now().Sub(lastPrintTime) > everyLogTime {
-			utils.GetTaskLogger(ctx).Info("single slice bulk worker")
+			m.sourceIndexPairProgress.Show(ctx)
 			lastPrintTime = time.Now()
 		}
 
@@ -1156,8 +1138,7 @@ func (m *Migrator) bulkFileWorker(ctx context.Context, doc <-chan *es2.Doc, file
 	}
 	wg.Wait()
 
-	// TODO::
-	utils.GetTaskLogger(ctx).Info("bulk file worker finish")
+	m.sourceIndexPairProgress.Finish(ctx)
 }
 
 func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{}, operation es2.Operation) error {
@@ -1180,6 +1161,9 @@ func (m *Migrator) syncUpsert(ctx context.Context, query map[string]interface{},
 	m.bulkWorker(ctx, docCh, m.IndexPair.TargetIndex, operation, errCh)
 	close(errCh)
 	errs := <-errsCh
+	if errs.Len() > 0 {
+		m.sourceIndexPairProgress.Fail(ctx)
+	}
 	return errs.Ret()
 }
 
@@ -1438,9 +1422,7 @@ func (m *Migrator) Import(force bool) error {
 	}
 
 	if force {
-		if err := m.copyIndexSettings(ctx, m.IndexFilePair.Index, force); err != nil {
-			utils.GetTaskLogger(ctx).Errorf("copy index settings %+v", err)
-		}
+		_ = m.copyIndexSettings(ctx, m.IndexFilePair.Index, force)
 	}
 
 	errCh := make(chan error)
@@ -1457,6 +1439,11 @@ func (m *Migrator) Import(force bool) error {
 	m.bulkWorker(ctx, docCh, m.IndexFilePair.Index, es2.OperationCreate, errCh)
 	close(errCh)
 	errs := <-errsCh
+	if errs.Len() > 0 {
+		m.sourceIndexPairProgress.Fail(ctx)
+	} else {
+		m.sourceIndexPairProgress.Finish(ctx)
+	}
 	return errs.Ret()
 }
 

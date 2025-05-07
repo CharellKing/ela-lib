@@ -1,10 +1,10 @@
 package gateway
 
 import (
-	"context"
 	"fmt"
 	"github.com/CharellKing/ela-lib/config"
 	"github.com/CharellKing/ela-lib/utils"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"testing"
 )
@@ -25,11 +25,10 @@ func TestGatewayServer(t *testing.T) {
 		return
 	}
 
-	utils.InitLogger(&cfg, nil)
-	ctx := context.Background()
+	utils.InitLogger(&cfg)
 	esProxy, err := NewESGateway(&cfg)
 	if err != nil {
-		utils.GetLogger(ctx).Errorf("create task manager %+v", err)
+		log.Errorf("create task manager %+v", err)
 		return
 	}
 	esProxy.Run()

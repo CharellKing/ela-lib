@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cast"
 	"runtime"
 )
 
@@ -15,6 +17,6 @@ func Recovery(ctx context.Context) {
 		buf := make([]byte, 64<<10) //nolint:gomnd
 		n := runtime.Stack(buf, false)
 		buf = buf[:n]
-		GetLogger(ctx).WithField("error", err).WithField("stack", string(buf)).Error("panic recovered")
+		log.Errorf("panic recovered, err: %+v\n stack: %+v", err, cast.ToString(buf))
 	}
 }

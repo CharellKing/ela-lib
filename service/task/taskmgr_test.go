@@ -25,16 +25,16 @@ func TestRun(t *testing.T) {
 		return
 	}
 
-	utils.InitLogger(&cfg, nil)
+	utils.InitLogger(&cfg)
 
 	ctx := context.Background()
 	taskMgr, err := NewTaskMgr(&cfg)
 	if err != nil {
-		utils.GetTaskLogger(ctx).Errorf("create task manager %+v", err)
+		t.Error(err)
 		return
 	}
 	if err := taskMgr.Run(ctx); err != nil {
-		utils.GetTaskLogger(ctx).Errorf("run task manager %+v", err)
+		t.Error(err)
 		return
 	}
 }

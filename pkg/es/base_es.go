@@ -9,6 +9,7 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
 	_ "github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"math/rand"
 	"net/http"
@@ -222,8 +223,7 @@ func (es *BaseES) MatchRule(c *gin.Context) *UriPathParserResult {
 func (es *BaseES) MakeUri(c *gin.Context, uriPathParserResult *UriPathParserResult) (*UriPathMakeResult, error) {
 	actionRule, ok := es.ActionRuleMap[uriPathParserResult.RequestAction]
 	if !ok {
-		utils.GetLogger(c).Warnf("action rule not found %s", uriPathParserResult.RequestAction)
-
+		log.Infof("action rule not found %s", uriPathParserResult.RequestAction)
 		return &UriPathMakeResult{
 			Uri:    c.Request.RequestURI,
 			Method: MethodType(c.Request.Method),
