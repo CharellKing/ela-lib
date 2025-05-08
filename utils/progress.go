@@ -46,6 +46,9 @@ type Progress struct {
 	StartTime int64
 	EndTime   int64
 
+	SuccessCount atomic.Uint64
+	FailCount    atomic.Uint64
+
 	Status ProgressStatus
 }
 

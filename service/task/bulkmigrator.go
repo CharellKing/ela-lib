@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 type BulkMigrator struct {
@@ -57,9 +56,6 @@ type BulkMigrator struct {
 	taskProgress *utils.Progress
 
 	isCancelled *bool
-
-	successCount atomic.Uint64
-	failedCount  atomic.Uint64
 }
 
 func NewBulkMigratorWithES(ctx context.Context, sourceES, targetES es2.ES, isCancelled *bool) *BulkMigrator {
@@ -938,11 +934,11 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator) error) erro
 			err := callback(newMigrator)
 			if err != nil {
 				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
-				m.failedCount.Add(1)
+				m.taskProgress.FailCount.Add(1)
 				errs.Add(err)
 			} else {
 				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
-				m.successCount.Add(1)
+				m.taskProgress.SuccessCount.Add(1)
 			}
 			m.taskProgress.Increment(1)
 		})
@@ -973,10 +969,10 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 			if err != nil {
 				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 				errs.Add(err)
-				m.failedCount.Add(1)
+				m.taskProgress.FailCount.Add(1)
 			} else {
 				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
-				m.successCount.Add(1)
+				m.taskProgress.SuccessCount.Add(1)
 			}
 			m.taskProgress.Increment(1)
 		})
@@ -1007,10 +1003,10 @@ func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migr
 			if err != nil {
 				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 				errs.Add(err)
-				m.failedCount.Add(1)
+				m.taskProgress.FailCount.Add(1)
 			} else {
 				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
-				m.successCount.Add(1)
+				m.taskProgress.SuccessCount.Add(1)
 			}
 			m.taskProgress.Increment(1)
 		})
