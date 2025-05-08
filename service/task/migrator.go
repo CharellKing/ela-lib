@@ -191,21 +191,28 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 	}
 
 	return &Migrator{
-		err:               m.err,
-		ctx:               m.ctx,
-		SourceES:          m.SourceES,
-		TargetES:          m.TargetES,
-		IndexPair:         &indexPair,
-		ScrollSize:        m.ScrollSize,
-		ScrollTime:        m.ScrollTime,
-		SliceSize:         m.SliceSize,
-		BufferCount:       m.BufferCount,
-		ActionParallelism: m.ActionParallelism,
-		ActionSize:        m.ActionSize,
-		Ids:               m.Ids,
-		IndexFilePair:     m.IndexFilePair,
-		IndexTemplate:     m.IndexTemplate,
-		Query:             m.Query,
+		err:                     m.err,
+		ctx:                     m.ctx,
+		SourceES:                m.SourceES,
+		TargetES:                m.TargetES,
+		IndexPair:               &indexPair,
+		ScrollSize:              m.ScrollSize,
+		ScrollTime:              m.ScrollTime,
+		SliceSize:               m.SliceSize,
+		BufferCount:             m.BufferCount,
+		ActionParallelism:       m.ActionParallelism,
+		ActionSize:              m.ActionSize,
+		Ids:                     m.Ids,
+		IndexFilePair:           m.IndexFilePair,
+		IndexTemplate:           m.IndexTemplate,
+		Query:                   m.Query,
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -229,6 +236,14 @@ func (m *Migrator) WithIndexTemplate(indexTemplate config.IndexTemplate) *Migrat
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     &indexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -256,6 +271,14 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -283,6 +306,14 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -309,6 +340,14 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -335,6 +374,14 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -361,6 +408,14 @@ func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -388,6 +443,14 @@ func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -411,6 +474,14 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -434,6 +505,14 @@ func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migra
 		IndexFilePair:     indexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             m.Query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
@@ -457,6 +536,14 @@ func (m *Migrator) WithQuery(query string) *Migrator {
 		IndexFilePair:     m.IndexFilePair,
 		IndexTemplate:     m.IndexTemplate,
 		Query:             query,
+
+		sourceIndexPairProgress: m.sourceIndexPairProgress,
+		targetIndexPairProgress: m.targetIndexPairProgress,
+
+		sourceQueueExtrusion: m.sourceQueueExtrusion,
+		targetQueueExtrusion: m.targetQueueExtrusion,
+
+		isCancelled: m.isCancelled,
 	}
 }
 
