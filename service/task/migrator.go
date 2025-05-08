@@ -168,6 +168,10 @@ func (m *Migrator) buildIndexPairContext() (context.Context, error) {
 		return ctx, errors.WithStack(err)
 	}
 
+	if sourceSetting == nil {
+		return ctx, errors.Errorf("source index %s not exists", m.IndexPair.SourceIndex)
+	}
+
 	targetSetting, err := m.TargetES.GetIndexMappingAndSetting(m.IndexPair.TargetIndex)
 	if err != nil {
 		return ctx, errors.WithStack(err)

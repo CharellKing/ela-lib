@@ -73,15 +73,35 @@ tasks:
 #    action_parallelism: 2
 #    slice_size: 1
 
-  - name: sync
+#  - name: sync
+#    source_es: es5
+#    target_es: es8
+#    action: sync
+##    index_pattern: .*
+#    index_pairs:
+#      -
+#        source_index: "sample_index"
+#        target_index: "sample_hello31"
+#
+#    slice_size: 5
+#    scroll_size: 5000
+#    buffer_count: 3000
+#    action_parallelism: 5
+#    action_size: 5
+#    scroll_time: 10
+#    parallelism: 12
+#    query: '{"terms": {"_id": ["1", "2", "3"]}}'
+#    force: true
+
+  - name: sync1
     source_es: es5
     target_es: es8
     action: sync
-#    index_pattern: .*
+    index_pattern: .*
     index_pairs:
       -
-        source_index: "sample_index"
-        target_index: "sample_hello31"
+        source_index: "abc"
+        target_index: "def"
 
     slice_size: 5
     scroll_size: 5000
@@ -90,7 +110,7 @@ tasks:
     action_size: 5
     scroll_time: 10
     parallelism: 12
-    query: '{"terms": {"_id": ["1", "2", "3"]}}'
+    query: ''
     force: true
 
 #  - name: sync-diff
