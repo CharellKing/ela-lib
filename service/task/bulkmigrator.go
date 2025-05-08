@@ -135,6 +135,7 @@ func (m *BulkMigrator) WithIndexPairs(indexPairs ...*config.IndexPair) *BulkMigr
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexPair)
@@ -176,6 +177,7 @@ func (m *BulkMigrator) WithIndexFilePairs(indexFilePairs ...*config.IndexFilePai
 		IndexTemplates:    m.IndexTemplates,
 		Query:             m.Query,
 		taskProgress:      m.taskProgress,
+		isCancelled:       m.isCancelled,
 	}
 
 	newIndexPairsMap := make(map[string]*config.IndexFilePair)
@@ -216,6 +218,7 @@ func (m *BulkMigrator) WithIndexTemplates(indexTemplates ...*config.IndexTemplat
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 
 	newIndexTemplateMap := make(map[string]*config.IndexTemplate)
@@ -256,6 +259,7 @@ func (m *BulkMigrator) WithIndexFileRoot(indexFileRoot string) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 
 	return newBulkMigrator
@@ -290,6 +294,7 @@ func (m *BulkMigrator) WithScrollSize(scrollSize uint) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -321,6 +326,7 @@ func (m *BulkMigrator) WithScrollTime(scrollTime uint) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -352,6 +358,7 @@ func (m *BulkMigrator) WithSliceSize(sliceSize uint) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -383,6 +390,7 @@ func (m *BulkMigrator) WithBufferCount(bufferCount uint) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -415,6 +423,7 @@ func (m *BulkMigrator) WithActionParallelism(actionParallelism uint) *BulkMigrat
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -447,6 +456,7 @@ func (m *BulkMigrator) WithActionSize(actionSize uint) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -511,6 +521,7 @@ func (m *BulkMigrator) WithPatternIndexes(patterns []string) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 
 	return newBulkMigrator
@@ -544,6 +555,7 @@ func (m *BulkMigrator) WithParallelism(parallelism uint) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -572,6 +584,7 @@ func (m *BulkMigrator) WithIds(ids []string) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -596,6 +609,7 @@ func (m *BulkMigrator) WithQuery(query string) *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
@@ -620,6 +634,7 @@ func (m *BulkMigrator) clone() *BulkMigrator {
 		IndexTemplates:    m.IndexTemplates,
 		taskProgress:      m.taskProgress,
 		Query:             m.Query,
+		isCancelled:       m.isCancelled,
 	}
 }
 
