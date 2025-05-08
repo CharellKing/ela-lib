@@ -83,13 +83,13 @@ tasks:
         source_index: "sample_index"
         target_index: "sample_hello31"
 
-    scroll_size: 201
-    slice_size: 202
-    scroll_time: 203
-    parallelism: 204
-    buffer_count: 205
-    action_parallelism: 206
-    action_size: 207
+    slice_size: 5
+    scroll_size: 5000
+    buffer_count: 3000
+    action_parallelism: 5
+    action_size: 5
+    scroll_time: 10
+    parallelism: 12
     query: '{"terms": {"_id": ["1", "2", "3"]}}'
     force: true
 

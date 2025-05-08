@@ -28,6 +28,7 @@ const (
 
 	CtxKeyTaskProgress                CtxKey = "taskProgress"
 	CtxKeyTaskSourceIndexPairProgress CtxKey = "taskSourceIndexPairProgress"
+	CtxKeyTargetIndexPairProgress     CtxKey = "targetIndexPairProgress"
 
 	CtxKeySourceQueueExtrusion CtxKey = "sourceQueueExtrusion"
 	CtxKeyTargetQueueExtrusion CtxKey = "targetQueueExtrusion"
@@ -150,7 +151,7 @@ func SetCtxKeyTaskProgress(ctx context.Context, taskProgress *Progress) context.
 }
 
 func GetCtxKeySourceIndexPairProgress(ctx context.Context) *Progress {
-	indexPairProgress := ctx.Value(GetCtxKeySourceIndexPairProgress)
+	indexPairProgress := ctx.Value(CtxKeyTaskSourceIndexPairProgress)
 	if indexPairProgress == nil {
 		return nil
 	}
@@ -158,11 +159,11 @@ func GetCtxKeySourceIndexPairProgress(ctx context.Context) *Progress {
 }
 
 func SetCtxKeySourceIndexPairProgress(ctx context.Context, indexPairProgress *Progress) context.Context {
-	return context.WithValue(ctx, GetCtxKeySourceIndexPairProgress, indexPairProgress)
+	return context.WithValue(ctx, CtxKeyTaskSourceIndexPairProgress, indexPairProgress)
 }
 
 func GetCtxKeyTargetIndexPairProgress(ctx context.Context) *Progress {
-	indexPairProgress := ctx.Value(GetCtxKeyTargetIndexPairProgress)
+	indexPairProgress := ctx.Value(CtxKeyTargetIndexPairProgress)
 	if indexPairProgress == nil {
 		return nil
 	}
@@ -170,7 +171,7 @@ func GetCtxKeyTargetIndexPairProgress(ctx context.Context) *Progress {
 }
 
 func SetCtxKeyTargetIndexPairProgress(ctx context.Context, indexPairProgress *Progress) context.Context {
-	return context.WithValue(ctx, GetCtxKeyTargetIndexPairProgress, indexPairProgress)
+	return context.WithValue(ctx, CtxKeyTargetIndexPairProgress, indexPairProgress)
 }
 
 func GetCtxKeySourceQueueExtrusion(ctx context.Context) *Progress {

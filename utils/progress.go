@@ -108,7 +108,9 @@ func (p *Progress) Set(current uint64) {
 
 func (p *Progress) Show(ctx context.Context) {
 	p.Status = ProgressStatusRunning
-	progressCallBack(ctx, p)
+	if progressCallBack != nil {
+		progressCallBack(ctx, p)
+	}
 }
 
 func (p *Progress) done(ctx context.Context, status ProgressStatus) {
@@ -118,15 +120,21 @@ func (p *Progress) done(ctx context.Context, status ProgressStatus) {
 func (p *Progress) Finish(ctx context.Context) {
 	p.Current.Store(p.Total)
 	p.done(ctx, ProgressStatusFinished)
-	progressCallBack(ctx, p)
+	if progressCallBack != nil {
+		progressCallBack(ctx, p)
+	}
 }
 
 func (p *Progress) Fail(ctx context.Context) {
 	p.done(ctx, ProgressStatusFailed)
-	progressCallBack(ctx, p)
+	if progressCallBack != nil {
+		progressCallBack(ctx, p)
+	}
 }
 
 func (p *Progress) Cancel(ctx context.Context) {
 	p.done(ctx, ProgressStatusCancelled)
-	progressCallBack(ctx, p)
+	if progressCallBack != nil {
+		progressCallBack(ctx, p)
+	}
 }

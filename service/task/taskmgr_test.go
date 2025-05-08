@@ -10,7 +10,7 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	configPath := "D:\\code\\ela-lib\\config.yaml"
+	configPath := "/home/andy/code/ela-lib/config.yaml"
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
 
