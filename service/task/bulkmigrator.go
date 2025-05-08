@@ -947,15 +947,15 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator) error) erro
 
 		pool.Submit(func() {
 			err := callback(newMigrator)
+			m.taskProgress.Increment(1)
 			if err != nil {
-				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 				m.taskProgress.FailCount.Add(1)
 				errs.Add(err)
+				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 			} else {
-				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
 				m.taskProgress.SuccessCount.Add(1)
+				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
 			}
-			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
@@ -981,15 +981,15 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 
 		pool.Submit(func() {
 			err := callback(newMigrator)
+			m.taskProgress.Increment(1)
 			if err != nil {
-				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 				errs.Add(err)
 				m.taskProgress.FailCount.Add(1)
+				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 			} else {
-				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
 				m.taskProgress.SuccessCount.Add(1)
+				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
 			}
-			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
@@ -1015,15 +1015,15 @@ func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migr
 
 		pool.Submit(func() {
 			err := callback(newMigrator)
+			m.taskProgress.Increment(1)
 			if err != nil {
-				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 				errs.Add(err)
 				m.taskProgress.FailCount.Add(1)
+				newMigrator.sourceIndexPairProgress.Fail(newMigrator.GetCtx())
 			} else {
-				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
 				m.taskProgress.SuccessCount.Add(1)
+				newMigrator.sourceIndexPairProgress.Finish(newMigrator.GetCtx())
 			}
-			m.taskProgress.Increment(1)
 		})
 	}
 	pool.StopAndWait()
