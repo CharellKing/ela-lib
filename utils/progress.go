@@ -32,7 +32,7 @@ type ProgressStatus string
 
 const (
 	ProgressStatusRunning   ProgressStatus = "running"
-	ProgressStatusFinished  ProgressStatus = "finished"
+	ProgressStatusFinished  ProgressStatus = "completed"
 	ProgressStatusFailed    ProgressStatus = "failed"
 	ProgressStatusCancelled ProgressStatus = "cancelled"
 )

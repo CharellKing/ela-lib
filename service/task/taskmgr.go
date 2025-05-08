@@ -54,7 +54,7 @@ func (t *TaskMgr) Run(ctx context.Context, taskNames ...string) error {
 			continue
 		}
 		task := NewTaskWithES(ctx, taskCfg, t.usedESMap[taskCfg.SourceES], t.usedESMap[taskCfg.TargetES], t.isCancelled)
-		if err := task.Run(); err != nil {
+		if _, err := task.Run(); err != nil {
 			return errors.WithStack(err)
 		}
 
