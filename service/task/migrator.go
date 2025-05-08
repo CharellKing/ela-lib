@@ -73,6 +73,8 @@ type Migrator struct {
 	sourceQueueExtrusion *utils.Progress
 	targetQueueExtrusion *utils.Progress
 
+	pairProgress *utils.Progress
+
 	isCancelled *bool
 }
 
@@ -113,6 +115,9 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES, isCancelled *b
 	targetQueueExtrusion := utils.NewExtrusion("", defaultBufferCount)
 	ctx = utils.SetCtxKeyTargetQueueExtrusion(ctx, targetQueueExtrusion)
 
+	pairProgress := utils.NewProgress(string(utils.CtxKeyPairProgress), 0)
+	ctx = utils.SetCtxKeyPairProgress(ctx, pairProgress)
+
 	return &Migrator{
 		err:               nil,
 		ctx:               ctx,
@@ -127,6 +132,7 @@ func NewMigrator(ctx context.Context, srcES es2.ES, dstES es2.ES, isCancelled *b
 
 		sourceIndexPairProgress: sourceIndexPairProgress,
 		targetIndexPairProgress: targetIndexPairProgress,
+		pairProgress:            pairProgress,
 
 		sourceQueueExtrusion: sourceQueueExtrusion,
 		targetQueueExtrusion: targetQueueExtrusion,
@@ -212,6 +218,7 @@ func (m *Migrator) WithIndexPair(indexPair config.IndexPair) *Migrator {
 		Query:                   m.Query,
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -243,6 +250,7 @@ func (m *Migrator) WithIndexTemplate(indexTemplate config.IndexTemplate) *Migrat
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -278,6 +286,7 @@ func (m *Migrator) WithScrollSize(scrollSize uint) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -313,6 +322,7 @@ func (m *Migrator) WithScrollTime(scrollTime uint) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -347,6 +357,7 @@ func (m *Migrator) WithSliceSize(sliceSize uint) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -381,6 +392,7 @@ func (m *Migrator) WithBufferCount(sliceSize uint) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -415,6 +427,7 @@ func (m *Migrator) WithActionParallelism(actionParallelism uint) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -450,6 +463,7 @@ func (m *Migrator) WithActionSize(actionSize uint) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -481,6 +495,7 @@ func (m *Migrator) WithIds(ids []string) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -512,6 +527,7 @@ func (m *Migrator) WithIndexFilePair(indexFilePair *config.IndexFilePair) *Migra
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,
@@ -543,6 +559,7 @@ func (m *Migrator) WithQuery(query string) *Migrator {
 
 		sourceIndexPairProgress: m.sourceIndexPairProgress,
 		targetIndexPairProgress: m.targetIndexPairProgress,
+		pairProgress:            m.pairProgress,
 
 		sourceQueueExtrusion: m.sourceQueueExtrusion,
 		targetQueueExtrusion: m.targetQueueExtrusion,

@@ -32,6 +32,8 @@ const (
 
 	CtxKeySourceQueueExtrusion CtxKey = "sourceQueueExtrusion"
 	CtxKeyTargetQueueExtrusion CtxKey = "targetQueueExtrusion"
+
+	CtxKeyPairProgress CtxKey = "pairProgress"
 )
 
 func GetCtxKeySourceESVersion(ctx context.Context) string {
@@ -196,4 +198,16 @@ func GetCtxKeyTargetQueueExtrusion(ctx context.Context) *Progress {
 
 func SetCtxKeyTargetQueueExtrusion(ctx context.Context, queueExtrusion *Progress) context.Context {
 	return context.WithValue(ctx, CtxKeyTargetQueueExtrusion, queueExtrusion)
+}
+
+func GetCtxKeyPairProgress(ctx context.Context) *Progress {
+	pairProgress := ctx.Value(CtxKeyPairProgress)
+	if pairProgress == nil {
+		return nil
+	}
+	return pairProgress.(*Progress)
+}
+
+func SetCtxKeyPairProgress(ctx context.Context, pairProgress *Progress) context.Context {
+	return context.WithValue(ctx, CtxKeyPairProgress, pairProgress)
 }
