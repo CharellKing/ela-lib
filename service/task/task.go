@@ -162,6 +162,7 @@ func (t *Task) Run() (map[string]*DiffResult, error) {
 		return nil, nil
 	default:
 		taskName := utils.GetCtxKeyTaskName(ctx)
+		t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 		return nil, fmt.Errorf("%s invalid task action %s", taskName, taskAction)
 	}
 	t.bulkMigrator.taskProgress.Finish(t.bulkMigrator.ctx)
