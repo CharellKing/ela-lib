@@ -120,36 +120,43 @@ func (t *Task) Run() (map[string]*DiffResult, error) {
 	switch taskAction {
 	case config.TaskActionCopyIndex:
 		if err := t.CopyIndexSettings(); err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return nil, errors.WithStack(err)
 		}
 	case config.TaskActionSync:
 		if err := t.Sync(); err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return nil, errors.WithStack(err)
 		}
 	case config.TaskActionSyncDiff:
 		diffResultMap, err := t.SyncDiff()
 		if err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return diffResultMap, errors.WithStack(err)
 		}
 
 	case config.TaskActionCompare:
 		diffResultMap, err := t.bulkMigrator.Compare()
 		if err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return diffResultMap, errors.WithStack(err)
 		}
 		return diffResultMap, nil
 	case config.TaskActionImport:
 		if err := t.Import(); err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return nil, errors.WithStack(err)
 		}
 		return nil, nil
 	case config.TaskActionExport:
 		if err := t.Export(); err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return nil, errors.WithStack(err)
 		}
 		return nil, nil
 	case config.TaskActionTemplate:
 		if err := t.CreateTemplate(); err != nil {
+			t.bulkMigrator.taskProgress.Fail(t.bulkMigrator.ctx)
 			return nil, errors.WithStack(err)
 		}
 		return nil, nil
@@ -157,5 +164,6 @@ func (t *Task) Run() (map[string]*DiffResult, error) {
 		taskName := utils.GetCtxKeyTaskName(ctx)
 		return nil, fmt.Errorf("%s invalid task action %s", taskName, taskAction)
 	}
+	t.bulkMigrator.taskProgress.Finish(t.bulkMigrator.ctx)
 	return nil, nil
 }

@@ -68,6 +68,7 @@ func NewProgress(name string, total uint64) *Progress {
 		Current: atomic.Uint64{},
 
 		StartTime: time.Now().UnixMilli(),
+		Status:    ProgressStatusRunning,
 	}
 }
 
