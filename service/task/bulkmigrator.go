@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cast"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -930,7 +931,17 @@ func (m *BulkMigrator) parallelRun(callback func(migrator *Migrator) error) erro
 	pool := pond.New(cast.ToInt(m.Parallelism), len(m.IndexPairMap))
 	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
 	var errs utils.Errs
+
+	indexPairList := make([]*config.IndexPair, 0, len(m.IndexPairMap))
 	for _, indexPair := range m.IndexPairMap {
+		indexPairList = append(indexPairList, indexPair)
+	}
+
+	sort.Slice(indexPairList, func(i, j int) bool {
+		return indexPairList[i].SourceIndex < indexPairList[j].SourceIndex
+	})
+
+	for _, indexPair := range indexPairList {
 		if *m.isCancelled {
 			break
 		}
@@ -967,6 +978,15 @@ func (m *BulkMigrator) parallelRunWithIndexTemplate(callback func(migrator *Migr
 
 	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
 	var errs utils.Errs
+
+	indexTemplateList := make([]*config.IndexTemplate, 0, len(m.IndexTemplates))
+	for _, indexTemplate := range m.IndexTemplates {
+		indexTemplateList = append(indexTemplateList, indexTemplate)
+	}
+
+	sort.Slice(indexTemplateList, func(i, j int) bool {
+		return indexTemplateList[i].Name < indexTemplateList[j].Name
+	})
 	for _, indexTemplate := range m.IndexTemplates {
 		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexTemplate(*indexTemplate).
@@ -1001,6 +1021,14 @@ func (m *BulkMigrator) parallelRunWithIndexFilePair(callback func(migrator *Migr
 
 	m.taskProgress.Total = cast.ToUint64(len(m.IndexPairMap))
 	var errs utils.Errs
+
+	indexFilePairList := make([]*config.IndexFilePair, 0, len(m.IndexFilePairMap))
+	for _, indexFilePair := range m.IndexFilePairMap {
+		indexFilePairList = append(indexFilePairList, indexFilePair)
+	}
+	sort.Slice(indexFilePairList, func(i, j int) bool {
+		return indexFilePairList[i].Index < indexFilePairList[j].Index
+	})
 	for _, indexFilePair := range m.IndexFilePairMap {
 		newMigrator := NewMigrator(m.ctx, m.SourceES, m.TargetES, m.isCancelled)
 		newMigrator = newMigrator.WithIndexFilePair(indexFilePair).
