@@ -42,7 +42,8 @@ func basicAuth(username, password string) gin.HandlerFunc {
 }
 
 func NewESGateway(cfg *config.Config) (*ESGateway, error) {
-	engine := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	engine := gin.New()
 	engine.Use(basicAuth(cfg.GatewayCfg.User, cfg.GatewayCfg.Password))
 
 	var (
